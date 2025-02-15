@@ -46,6 +46,8 @@ plt.show()
 
 
 
+
+
 # Apply OCR
 text = pytesseract.image_to_string(gray, lang="eng")  
 
