@@ -34,12 +34,14 @@ plt.subplot(1, 2, 1)
 plt.imshow(adaptive_thresh, cmap="gray")
 plt.title("Adaptive Thresholding")
 plt.axis("off")
-
 plt.subplot(1, 2, 2)
 plt.imshow(morph, cmap="gray")
 plt.title("After Morphological Processing")
 plt.axis("off")
 plt.show()
+
+
+
 
 
 
