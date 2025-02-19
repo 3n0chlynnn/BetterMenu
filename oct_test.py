@@ -15,6 +15,7 @@ plt.title("gray")
 plt.axis("off")
 plt.show()
 
+#CLAHE enhance
 clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
 enhanced = clahe.apply(gray)
 plt.figure(figsize=(10, 5))
@@ -24,30 +25,20 @@ plt.axis("off")
 plt.show()
 
 
-# Apply Median Blur to remove noise instead of Gaussian
-denoised = cv2.medianBlur(enhanced, 3)
-plt.figure(figsize=(10, 5))
-plt.imshow(denoised, cmap="gray")
-plt.title("median")
-plt.axis("off")
-plt.show()
+# Apply Otsu’s Thresholding (Instead of Adaptive)
+_, otsu_thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-# Apply adaptive thresholding
-adaptive_thresh = cv2.adaptiveThreshold(
-    denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 10
-)
-
-# Display results
+# Display result
 plt.figure(figsize=(10, 5))
-plt.imshow(adaptive_thresh, cmap="gray")
-plt.title("Adaptive Thresholding")
+plt.imshow(otsu_thresh, cmap="gray")
+plt.title("Otsu Thresholding")
 plt.axis("off")
 plt.show()
 
 
-###########################
-# Apply OCR
-text = pytesseract.image_to_string(adaptive_thresh, lang="eng")  
+
+# Apply OCR with better settings
+text = pytesseract.image_to_string(otsu_thresh, lang="eng")
 
 # Print the extracted text
 print(text)
