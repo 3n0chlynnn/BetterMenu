@@ -9,40 +9,45 @@ const MenuResultScreen = ({ route }) => {
   useEffect(() => {
     // Simulate processing time
     setTimeout(() => {
-      // Mock translated menu data (English to Chinese)
-      setMenuItems([
+      // Mock translated menu data (English to Chinese) with categories
+      const allItems = [
         {
           id: 1,
-          original: "Grilled Salmon",
-          translated: "烤三文鱼",
-          image: "https://via.placeholder.com/60x60?text=🐟",
-          description: "Fresh Atlantic salmon grilled to perfection with herbs"
-        },
-        {
-          id: 2,
           original: "Caesar Salad",
           translated: "凯撒沙拉",
+          category: "Appetizers",
           image: "https://via.placeholder.com/60x60?text=🥗",
           description: "Crisp romaine lettuce with parmesan cheese and croutons"
         },
         {
+          id: 2,
+          original: "Vegetable Soup",
+          translated: "蔬菜汤",
+          category: "Appetizers",
+          image: "https://via.placeholder.com/60x60?text=🍲",
+          description: "Fresh seasonal vegetables in clear broth"
+        },
+        {
           id: 3,
-          original: "Beef Steak",
-          translated: "牛排",
-          image: "https://via.placeholder.com/60x60?text=🥩",
-          description: "Premium ribeye steak cooked to your preference"
+          original: "Grilled Salmon",
+          translated: "烤三文鱼",
+          category: "Entrees",
+          image: "https://via.placeholder.com/60x60?text=🐟",
+          description: "Fresh Atlantic salmon grilled to perfection with herbs"
         },
         {
           id: 4,
-          original: "Chocolate Cake",
-          translated: "巧克力蛋糕",
-          image: "https://via.placeholder.com/60x60?text=🍰",
-          description: "Rich chocolate layer cake with vanilla frosting"
+          original: "Beef Steak",
+          translated: "牛排",
+          category: "Entrees",
+          image: "https://via.placeholder.com/60x60?text=🥩",
+          description: "Premium ribeye steak cooked to your preference"
         },
         {
           id: 5,
           original: "Fish and Chips",
           translated: "炸鱼薯条",
+          category: "Entrees",
           image: "https://via.placeholder.com/60x60?text=🍟",
           description: "Battered fish with crispy fries"
         },
@@ -50,24 +55,54 @@ const MenuResultScreen = ({ route }) => {
           id: 6,
           original: "Chicken Alfredo",
           translated: "阿尔弗雷多鸡肉面",
+          category: "Entrees",
           image: "https://via.placeholder.com/60x60?text=🍝",
           description: "Creamy pasta with grilled chicken"
         },
         {
           id: 7,
-          original: "Vegetable Soup",
-          translated: "蔬菜汤",
-          image: "https://via.placeholder.com/60x60?text=🍲",
-          description: "Fresh seasonal vegetables in clear broth"
+          original: "Chocolate Cake",
+          translated: "巧克力蛋糕",
+          category: "Desserts",
+          image: "https://via.placeholder.com/60x60?text=🍰",
+          description: "Rich chocolate layer cake with vanilla frosting"
         },
         {
           id: 8,
           original: "Apple Pie",
           translated: "苹果派",
+          category: "Desserts",
           image: "https://via.placeholder.com/60x60?text=🥧",
           description: "Traditional apple pie with cinnamon"
+        },
+        {
+          id: 9,
+          original: "Coffee",
+          translated: "咖啡",
+          category: "Beverages",
+          image: "https://via.placeholder.com/60x60?text=☕",
+          description: "Freshly brewed house blend coffee"
+        },
+        {
+          id: 10,
+          original: "Fresh Orange Juice",
+          translated: "鲜榨橙汁",
+          category: "Beverages",
+          image: "https://via.placeholder.com/60x60?text=🍊",
+          description: "Freshly squeezed orange juice"
         }
-      ]);
+      ];
+      
+      // Group dishes by category
+      const groupedItems = allItems.reduce((acc, item) => {
+        if (!acc[item.category]) {
+          acc[item.category] = [];
+        }
+        acc[item.category].push(item);
+        return acc;
+      }, {});
+      
+      setMenuItems(groupedItems);
       setLoading(false);
     }, 2000);
   }, []);
@@ -89,16 +124,21 @@ const MenuResultScreen = ({ route }) => {
         
         <Text style={styles.sectionTitle}>Translated Menu</Text>
         
-        {menuItems.map((item) => (
-          <View key={item.id} style={styles.menuItem}>
-            <View style={styles.itemHeader}>
-              <View style={styles.textContainer}>
-                <Text style={styles.originalText}>{item.original}</Text>
-                <Text style={styles.translatedText}>{item.translated}</Text>
-                <Text style={styles.description}>{item.description}</Text>
+        {Object.entries(menuItems).map(([category, items]) => (
+          <View key={category}>
+            <Text style={styles.categoryTitle}>{category}</Text>
+            {items.map((item) => (
+              <View key={item.id} style={styles.menuItem}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.originalText}>{item.original}</Text>
+                    <Text style={styles.translatedText}>{item.translated}</Text>
+                    <Text style={styles.description}>{item.description}</Text>
+                  </View>
+                  <Image source={{ uri: item.image }} style={styles.dishImage} />
+                </View>
               </View>
-              <Image source={{ uri: item.image }} style={styles.dishImage} />
-            </View>
+            ))}
           </View>
         ))}
       </ScrollView>
@@ -134,8 +174,9 @@ const styles = StyleSheet.create({
   },
   originalImage: {
     width: '100%',
-    height: 200,
-    resizeMode: 'cover',
+    height: 300,
+    resizeMode: 'contain',
+    backgroundColor: '#f8f9fa',
   },
   sectionTitle: {
     fontSize: 24,
@@ -143,6 +184,17 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     padding: 20,
     paddingBottom: 10,
+  },
+  categoryTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#34495e',
+    marginLeft: 20,
+    marginTop: 20,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
+    paddingBottom: 5,
   },
   menuItem: {
     backgroundColor: 'white',
