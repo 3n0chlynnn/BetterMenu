@@ -17,8 +17,7 @@ const CameraScreen = ({ navigation }) => {
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
+      allowsEditing: false,
       quality: 1,
     });
 
@@ -39,7 +38,7 @@ const CameraScreen = ({ navigation }) => {
           <Text style={styles.buttonText}>Grant permission</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={pickImage}>
-          <Text style={styles.buttonText}>📷 Choose from Gallery</Text>
+          <Text style={styles.buttonText}>🖼️ Choose from Gallery</Text>
         </TouchableOpacity>
       </View>
     );
@@ -59,7 +58,7 @@ const CameraScreen = ({ navigation }) => {
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.galleryButton} onPress={pickImage}>
-          <Text style={styles.galleryText}>📷</Text>
+          <Text style={styles.galleryText}>🖼️</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -99,7 +98,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#ff4757',
+    backgroundColor: 'white',
+    borderWidth: 4,
+    borderColor: '#ddd',
   },
   galleryButton: {
     position: 'absolute',

@@ -15,8 +15,6 @@ const MenuResultScreen = ({ route }) => {
           id: 1,
           original: "Grilled Salmon",
           translated: "烤三文鱼",
-          price: "$28.00",
-          rating: 4.5,
           image: "https://via.placeholder.com/60x60?text=🐟",
           description: "Fresh Atlantic salmon grilled to perfection with herbs"
         },
@@ -24,8 +22,6 @@ const MenuResultScreen = ({ route }) => {
           id: 2,
           original: "Caesar Salad",
           translated: "凯撒沙拉",
-          price: "$15.00",
-          rating: 4.2,
           image: "https://via.placeholder.com/60x60?text=🥗",
           description: "Crisp romaine lettuce with parmesan cheese and croutons"
         },
@@ -33,8 +29,6 @@ const MenuResultScreen = ({ route }) => {
           id: 3,
           original: "Beef Steak",
           translated: "牛排",
-          price: "$35.00",
-          rating: 4.7,
           image: "https://via.placeholder.com/60x60?text=🥩",
           description: "Premium ribeye steak cooked to your preference"
         },
@@ -42,10 +36,36 @@ const MenuResultScreen = ({ route }) => {
           id: 4,
           original: "Chocolate Cake",
           translated: "巧克力蛋糕",
-          price: "$12.00",
-          rating: 4.8,
           image: "https://via.placeholder.com/60x60?text=🍰",
           description: "Rich chocolate layer cake with vanilla frosting"
+        },
+        {
+          id: 5,
+          original: "Fish and Chips",
+          translated: "炸鱼薯条",
+          image: "https://via.placeholder.com/60x60?text=🍟",
+          description: "Battered fish with crispy fries"
+        },
+        {
+          id: 6,
+          original: "Chicken Alfredo",
+          translated: "阿尔弗雷多鸡肉面",
+          image: "https://via.placeholder.com/60x60?text=🍝",
+          description: "Creamy pasta with grilled chicken"
+        },
+        {
+          id: 7,
+          original: "Vegetable Soup",
+          translated: "蔬菜汤",
+          image: "https://via.placeholder.com/60x60?text=🍲",
+          description: "Fresh seasonal vegetables in clear broth"
+        },
+        {
+          id: 8,
+          original: "Apple Pie",
+          translated: "苹果派",
+          image: "https://via.placeholder.com/60x60?text=🥧",
+          description: "Traditional apple pie with cinnamon"
         }
       ]);
       setLoading(false);
@@ -78,10 +98,6 @@ const MenuResultScreen = ({ route }) => {
                 <Text style={styles.description}>{item.description}</Text>
               </View>
               <Image source={{ uri: item.image }} style={styles.dishImage} />
-            </View>
-            <View style={styles.itemFooter}>
-              <Text style={styles.price}>{item.price}</Text>
-              <Text style={styles.rating}>⭐ {item.rating}</Text>
             </View>
           </View>
         ))}
@@ -169,24 +185,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 8,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#ecf0f1',
-  },
-  price: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#27ae60',
-  },
-  rating: {
-    fontSize: 16,
-    color: '#f39c12',
   },
 });
 
