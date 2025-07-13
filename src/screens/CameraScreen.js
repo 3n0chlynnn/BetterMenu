@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 
 const CameraScreen = ({ navigation }) => {
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
 
   const takePicture = async () => {
     if (camera) {
       const photo = await camera.takePictureAsync();
-      // For now, just navigate to results with mock data
       navigation.navigate('MenuResult', { imageUri: photo.uri });
     }
   };
@@ -35,13 +27,17 @@ const CameraScreen = ({ navigation }) => {
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return <View />;
   }
-  if (hasPermission === false) {
+
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text>No access to camera</Text>
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <TouchableOpacity style={styles.button} onPress={requestPermission}>
+          <Text style={styles.buttonText}>Grant permission</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={pickImage}>
           <Text style={styles.buttonText}>📷 Choose from Gallery</Text>
         </TouchableOpacity>
@@ -51,9 +47,9 @@ const CameraScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Camera 
+      <CameraView 
         style={styles.camera} 
-        type={Camera.Constants.Type.back}
+        facing="back"
         ref={ref => setCamera(ref)}
       />
       
@@ -73,6 +69,10 @@ const CameraScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  message: {
+    textAlign: 'center',
+    paddingBottom: 10,
   },
   camera: {
     flex: 1,
