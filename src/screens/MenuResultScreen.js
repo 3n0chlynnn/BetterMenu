@@ -1,118 +1,88 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import { processMenuPhoto } from '../services/menuService';
 
 const MenuResultScreen = ({ route }) => {
   const { imageUri } = route.params;
   const [loading, setLoading] = useState(true);
-  const [menuItems, setMenuItems] = useState([]);
+  const [menuItems, setMenuItems] = useState({});
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Simulate processing time
-    setTimeout(() => {
-      // Mock translated menu data (English to Chinese) with categories
-      const allItems = [
-        {
-          id: 1,
-          original: "Caesar Salad",
-          translated: "凯撒沙拉",
-          category: "Appetizers",
-          image: "https://via.placeholder.com/60x60?text=🥗",
-          description: "Crisp romaine lettuce with parmesan cheese and croutons"
-        },
-        {
-          id: 2,
-          original: "Vegetable Soup",
-          translated: "蔬菜汤",
-          category: "Appetizers",
-          image: "https://via.placeholder.com/60x60?text=🍲",
-          description: "Fresh seasonal vegetables in clear broth"
-        },
-        {
-          id: 3,
-          original: "Grilled Salmon",
-          translated: "烤三文鱼",
-          category: "Entrees",
-          image: "https://via.placeholder.com/60x60?text=🐟",
-          description: "Fresh Atlantic salmon grilled to perfection with herbs"
-        },
-        {
-          id: 4,
-          original: "Beef Steak",
-          translated: "牛排",
-          category: "Entrees",
-          image: "https://via.placeholder.com/60x60?text=🥩",
-          description: "Premium ribeye steak cooked to your preference"
-        },
-        {
-          id: 5,
-          original: "Fish and Chips",
-          translated: "炸鱼薯条",
-          category: "Entrees",
-          image: "https://via.placeholder.com/60x60?text=🍟",
-          description: "Battered fish with crispy fries"
-        },
-        {
-          id: 6,
-          original: "Chicken Alfredo",
-          translated: "阿尔弗雷多鸡肉面",
-          category: "Entrees",
-          image: "https://via.placeholder.com/60x60?text=🍝",
-          description: "Creamy pasta with grilled chicken"
-        },
-        {
-          id: 7,
-          original: "Chocolate Cake",
-          translated: "巧克力蛋糕",
-          category: "Desserts",
-          image: "https://via.placeholder.com/60x60?text=🍰",
-          description: "Rich chocolate layer cake with vanilla frosting"
-        },
-        {
-          id: 8,
-          original: "Apple Pie",
-          translated: "苹果派",
-          category: "Desserts",
-          image: "https://via.placeholder.com/60x60?text=🥧",
-          description: "Traditional apple pie with cinnamon"
-        },
-        {
-          id: 9,
-          original: "Coffee",
-          translated: "咖啡",
-          category: "Beverages",
-          image: "https://via.placeholder.com/60x60?text=☕",
-          description: "Freshly brewed house blend coffee"
-        },
-        {
-          id: 10,
-          original: "Fresh Orange Juice",
-          translated: "鲜榨橙汁",
-          category: "Beverages",
-          image: "https://via.placeholder.com/60x60?text=🍊",
-          description: "Freshly squeezed orange juice"
+    const processImage = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const result = await processMenuPhoto(imageUri);
+        
+        if (result.success) {
+          setMenuItems(result.menuItems);
+        } else {
+          setError(result.error);
+          // Fallback to mock data if API fails
+          console.log('API failed, using mock data:', result.error);
+          setMenuItems(getMockMenuData());
         }
-      ];
-      
-      // Group dishes by category
-      const groupedItems = allItems.reduce((acc, item) => {
-        if (!acc[item.category]) {
-          acc[item.category] = [];
-        }
-        acc[item.category].push(item);
-        return acc;
-      }, {});
-      
-      setMenuItems(groupedItems);
-      setLoading(false);
-    }, 2000);
-  }, []);
+      } catch (err) {
+        console.error('Failed to process menu:', err);
+        setError('Failed to process menu. Using demo data.');
+        // Fallback to mock data
+        setMenuItems(getMockMenuData());
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    processImage();
+  }, [imageUri]);
+
+  // Fallback mock data function
+  const getMockMenuData = () => {
+    const allItems = [
+      {
+        id: 1,
+        original: "Caesar Salad",
+        translated: "凯撒沙拉",
+        category: "Appetizers",
+        image: "https://via.placeholder.com/60x60?text=🥗",
+        description: "Crisp romaine lettuce with parmesan cheese and croutons"
+      },
+      {
+        id: 2,
+        original: "Grilled Salmon",
+        translated: "烤三文鱼",
+        category: "Entrees",
+        image: "https://via.placeholder.com/60x60?text=🐟",
+        description: "Fresh Atlantic salmon grilled to perfection with herbs"
+      },
+      {
+        id: 3,
+        original: "Chocolate Cake",
+        translated: "巧克力蛋糕",
+        category: "Desserts",
+        image: "https://via.placeholder.com/60x60?text=🍰",
+        description: "Rich chocolate layer cake with vanilla frosting"
+      }
+    ];
+    
+    return allItems.reduce((acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    }, {});
+  };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Translating menu...</Text>
-        <Text style={styles.loadingSubtext}>Analyzing image and fetching dish information</Text>
+        <Text style={styles.loadingText}>Processing your menu...</Text>
+        <Text style={styles.loadingSubtext}>
+          {error ? 'API unavailable - using demo mode' : 'Extracting text and translating dishes'}
+        </Text>
       </View>
     );
   }
