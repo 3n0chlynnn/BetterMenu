@@ -63,7 +63,7 @@ export const extractTextFromImage = async (imageUri) => {
 };
 
 // Generate JWT and get OAuth access token
-const getAccessToken = async () => {
+export const getAccessToken = async () => {
   // Return cached token if still valid
   if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
     return accessToken;

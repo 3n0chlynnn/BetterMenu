@@ -1,12 +1,5 @@
 import { API_CONFIG, API_URLS } from './config';
-
-// Import token functions from OCR service to reuse authentication
-const getAccessToken = async () => {
-  // This is a duplicate of the function in ocrService.js
-  // In production, you might want to move this to a shared auth service
-  const { getAccessToken: getOCRAccessToken } = await import('./ocrService.js');
-  return getOCRAccessToken();
-};
+import { getAccessToken } from './ocrService';
 
 export const translateText = async (text, targetLanguage = 'zh') => {
   // If APIs are disabled, use mock translation
