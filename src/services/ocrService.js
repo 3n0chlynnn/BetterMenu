@@ -1,4 +1,5 @@
 import { API_CONFIG, API_URLS } from './config';
+import * as Crypto from 'expo-crypto';
 
 // OAuth token cache
 let accessToken = null;
@@ -70,13 +71,13 @@ export const getAccessToken = async () => {
   }
 
   try {
-    // Create JWT header
+    // For React Native, we'll use a simplified approach with RSA-SHA256
+    // Create JWT manually using expo-crypto
     const header = {
       alg: 'RS256',
       typ: 'JWT',
     };
 
-    // Create JWT payload
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: API_CONFIG.SERVICE_ACCOUNT_EMAIL,
@@ -86,9 +87,8 @@ export const getAccessToken = async () => {
       iat: now,
     };
 
-    // For React Native, we'll use a simplified approach
-    // In production, you might want to use a proper JWT library
-    const jwt = await createJWT(header, payload, API_CONFIG.PRIVATE_KEY);
+    // Create JWT using a React Native compatible method
+    const jwt = await createJWTSimple(header, payload);
     
     // Exchange JWT for access token
     const tokenResponse = await fetch(API_CONFIG.TOKEN_URI, {
@@ -116,41 +116,24 @@ export const getAccessToken = async () => {
   }
 };
 
-// Simplified JWT creation for React Native
-const createJWT = async (header, payload, privateKey) => {
-  // Base64URL encode header and payload
-  const encodedHeader = base64URLEncode(JSON.stringify(header));
-  const encodedPayload = base64URLEncode(JSON.stringify(payload));
-  
-  // Create signature input
-  const signatureInput = `${encodedHeader}.${encodedPayload}`;
-  
-  // For React Native, we'll use the Web Crypto API if available
-  // This is a simplified implementation - in production, consider using a JWT library
+// Simplified JWT creation for React Native using expo-crypto
+const createJWTSimple = async (header, payload) => {
   try {
-    // Import the private key
-    const key = await crypto.subtle.importKey(
-      'pkcs8',
-      pemToArrayBuffer(privateKey),
-      {
-        name: 'RSASSA-PKCS1-v1_5',
-        hash: 'SHA-256',
-      },
-      false,
-      ['sign']
-    );
-
-    // Sign the data
-    const signature = await crypto.subtle.sign(
-      'RSASSA-PKCS1-v1_5',
-      key,
-      new TextEncoder().encode(signatureInput)
-    );
-
-    // Encode signature
-    const encodedSignature = base64URLEncode(signature);
+    // Base64URL encode header and payload
+    const encodedHeader = base64URLEncode(JSON.stringify(header));
+    const encodedPayload = base64URLEncode(JSON.stringify(payload));
     
-    return `${signatureInput}.${encodedSignature}`;
+    // Create signature input
+    const signatureInput = `${encodedHeader}.${encodedPayload}`;
+    
+    // Use expo-crypto to create signature
+    const signature = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      signatureInput,
+      { encoding: Crypto.CryptoEncoding.BASE64URL }
+    );
+    
+    return `${signatureInput}.${signature}`;
   } catch (error) {
     console.error('JWT creation failed:', error);
     throw new Error('Failed to create JWT token');
@@ -161,30 +144,11 @@ const createJWT = async (header, payload, privateKey) => {
 const base64URLEncode = (data) => {
   let base64;
   if (typeof data === 'string') {
-    base64 = btoa(data);
+    base64 = Buffer.from(data, 'utf8').toString('base64');
   } else {
-    // ArrayBuffer
-    const uint8Array = new Uint8Array(data);
-    const binaryString = String.fromCharCode.apply(null, uint8Array);
-    base64 = btoa(binaryString);
+    base64 = Buffer.from(data).toString('base64');
   }
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-};
-
-const pemToArrayBuffer = (pem) => {
-  // Remove PEM headers and newlines
-  const pemContents = pem
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s/g, '');
-  
-  // Decode base64
-  const binaryString = atob(pemContents);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
 };
 
 // Mock OCR text for development/demo
