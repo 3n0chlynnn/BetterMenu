@@ -40,7 +40,7 @@ X0DvqNHv3o9DFuFgMnyNOQ==
   TOKEN_URI: 'https://oauth2.googleapis.com/token',
   
   // Enable/disable API usage (set to false to use mock data only)
-  USE_REAL_APIS: false, // Temporarily disabled until JWT signing is fixed
+  USE_REAL_APIS: true, // Re-enabled with proper RSA signing
 };
 
 // API URLs (no API key needed with service account)

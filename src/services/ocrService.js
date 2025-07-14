@@ -1,5 +1,5 @@
 import { API_CONFIG, API_URLS } from './config';
-import * as Crypto from 'expo-crypto';
+import { RSA } from 'react-native-rsa-native';
 
 // OAuth token cache
 let accessToken = null;
@@ -71,13 +71,13 @@ export const getAccessToken = async () => {
   }
 
   try {
-    // For React Native, we'll use a simplified approach with RSA-SHA256
-    // Create JWT manually using expo-crypto
+    // Create JWT header
     const header = {
       alg: 'RS256',
       typ: 'JWT',
     };
 
+    // Create JWT payload
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: API_CONFIG.SERVICE_ACCOUNT_EMAIL,
@@ -87,8 +87,8 @@ export const getAccessToken = async () => {
       iat: now,
     };
 
-    // Create JWT using a React Native compatible method
-    const jwt = await createJWTSimple(header, payload);
+    // Create JWT using proper RSA signing
+    const jwt = await createJWTWithRSA(header, payload, API_CONFIG.PRIVATE_KEY);
     
     // Exchange JWT for access token
     const tokenResponse = await fetch(API_CONFIG.TOKEN_URI, {
@@ -116,8 +116,8 @@ export const getAccessToken = async () => {
   }
 };
 
-// Simplified JWT creation for React Native using expo-crypto
-const createJWTSimple = async (header, payload) => {
+// Create JWT with proper RSA-SHA256 signing
+const createJWTWithRSA = async (header, payload, privateKey) => {
   try {
     // Base64URL encode header and payload
     const encodedHeader = base64URLEncode(JSON.stringify(header));
@@ -126,14 +126,13 @@ const createJWTSimple = async (header, payload) => {
     // Create signature input
     const signatureInput = `${encodedHeader}.${encodedPayload}`;
     
-    // Use expo-crypto to create signature
-    const signature = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      signatureInput,
-      { encoding: Crypto.CryptoEncoding.BASE64URL }
-    );
+    // Sign with RSA-SHA256
+    const signature = await RSA.signWithAlgorithm(signatureInput, privateKey, RSA.SHA256withRSA);
     
-    return `${signatureInput}.${signature}`;
+    // Convert signature to base64URL
+    const encodedSignature = base64URLEncode(signature, true);
+    
+    return `${signatureInput}.${encodedSignature}`;
   } catch (error) {
     console.error('JWT creation failed:', error);
     throw new Error('Failed to create JWT token');
@@ -141,9 +140,12 @@ const createJWTSimple = async (header, payload) => {
 };
 
 // Utility functions
-const base64URLEncode = (data) => {
+const base64URLEncode = (data, isSignature = false) => {
   let base64;
-  if (typeof data === 'string') {
+  if (isSignature) {
+    // Signature is already base64 encoded
+    base64 = data;
+  } else if (typeof data === 'string') {
     base64 = Buffer.from(data, 'utf8').toString('base64');
   } else {
     base64 = Buffer.from(data).toString('base64');
