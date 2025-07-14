@@ -1,5 +1,6 @@
 import { API_CONFIG, API_URLS } from './config';
 import { RSA } from 'react-native-rsa-native';
+import { encode as base64Encode } from 'react-native-base64';
 
 // OAuth token cache
 let accessToken = null;
@@ -139,16 +140,18 @@ const createJWTWithRSA = async (header, payload, privateKey) => {
   }
 };
 
-// Utility functions
+// Utility functions - React Native compatible base64URL encoding
 const base64URLEncode = (data, isSignature = false) => {
   let base64;
   if (isSignature) {
     // Signature is already base64 encoded
     base64 = data;
   } else if (typeof data === 'string') {
-    base64 = Buffer.from(data, 'utf8').toString('base64');
+    // Use React Native compatible base64 encoding
+    base64 = base64Encode(data);
   } else {
-    base64 = Buffer.from(data).toString('base64');
+    // For other data types, convert to string first
+    base64 = base64Encode(String(data));
   }
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 };
