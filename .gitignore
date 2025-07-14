@@ -35,3 +35,6 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+*.json
+# Google Cloud credentials
+buoyant-valve-465820-u2-76210518cdaf.json
