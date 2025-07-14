@@ -34,6 +34,10 @@ export const extractTextFromImage = async (imageUri) => {
               type: 'TEXT_DETECTION',
               maxResults: 1,
             },
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 10,
+            },
           ],
         },
       ],
@@ -55,10 +59,22 @@ export const extractTextFromImage = async (imageUri) => {
     }
 
     const detectedText = result.responses[0]?.textAnnotations?.[0]?.description || '';
+    const objects = result.responses[0]?.localizedObjectAnnotations || [];
+    
+    // Validate if this looks like a menu
+    const menuValidation = validateMenuPhoto(detectedText, objects);
+    if (!menuValidation.isLikelyMenu) {
+      throw new Error(`This doesn't appear to be a menu. ${menuValidation.reason}`);
+    }
+    
     return detectedText;
   } catch (error) {
     console.error('OCR Error:', error);
-    // Fallback to mock data if API fails
+    // If it's a validation error, re-throw it to show to user
+    if (error.message.includes("doesn't appear to be a menu")) {
+      throw error;
+    }
+    // Otherwise fallback to mock data
     return getMockOCRText();
   }
 };
@@ -176,6 +192,80 @@ const base64URLEncode = (data, isSignature = false) => {
     base64 = btoa(String(data));
   }
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+};
+
+// Validate if the photo is likely a menu
+const validateMenuPhoto = (text, objects) => {
+  const lowerText = text.toLowerCase();
+  
+  // Check for menu indicators
+  const menuKeywords = [
+    'menu', 'appetizer', 'entree', 'dessert', 'beverage', 'drink', 'starter',
+    'main course', 'soup', 'salad', 'pasta', 'pizza', 'burger', 'sandwich',
+    'coffee', 'tea', 'wine', 'beer', 'cocktail', 'price', '$', '€', '£', '¥'
+  ];
+  
+  const menuKeywordCount = menuKeywords.filter(keyword => 
+    lowerText.includes(keyword)
+  ).length;
+  
+  // Check for price patterns
+  const pricePatterns = [
+    /\$\d+\.?\d*/g,
+    /\d+\.?\d*\$?/g,
+    /£\d+\.?\d*/g,
+    /€\d+\.?\d*/g,
+    /¥\d+\.?\d*/g
+  ];
+  
+  const hasPrices = pricePatterns.some(pattern => pattern.test(text));
+  
+  // Check text density (menus usually have lots of text)
+  const wordCount = text.split(/\s+/).length;
+  const lineCount = text.split('\n').length;
+  
+  // Check for non-menu indicators
+  const nonMenuKeywords = [
+    'street', 'address', 'phone', 'email', 'website', 'http', 'www',
+    'receipt', 'total', 'change', 'thank you', 'visit again'
+  ];
+  
+  const nonMenuKeywordCount = nonMenuKeywords.filter(keyword => 
+    lowerText.includes(keyword)
+  ).length;
+  
+  // Scoring system
+  let score = 0;
+  
+  // Positive indicators
+  if (menuKeywordCount >= 3) score += 3;
+  else if (menuKeywordCount >= 1) score += 1;
+  
+  if (hasPrices) score += 2;
+  if (wordCount >= 20) score += 1;
+  if (lineCount >= 10) score += 1;
+  
+  // Negative indicators
+  if (nonMenuKeywordCount >= 3) score -= 2;
+  if (wordCount < 10) score -= 2;
+  
+  // Decision
+  const isLikelyMenu = score >= 3;
+  
+  let reason = '';
+  if (!isLikelyMenu) {
+    if (menuKeywordCount === 0) {
+      reason = 'No menu-related words found.';
+    } else if (!hasPrices) {
+      reason = 'No prices detected.';
+    } else if (wordCount < 10) {
+      reason = 'Too little text detected.';
+    } else {
+      reason = 'Content doesn\'t match menu patterns.';
+    }
+  }
+  
+  return { isLikelyMenu, score, reason };
 };
 
 // Mock OCR text for development/demo

@@ -68,84 +68,294 @@ const getMockTranslation = (text) => {
   return translations[text] || text;
 };
 
-// Function to detect menu items from text and translate them
+// Function to intelligently parse and process menu text
 export const processMenuText = async (extractedText) => {
   try {
-    // Split text into potential menu items (basic parsing)
+    // Split text into lines for analysis
     const lines = extractedText.split('\n').filter(line => line.trim().length > 0);
     
-    // Filter out likely non-food items (prices, headers, etc.)
-    const menuItems = lines.filter(line => {
-      const text = line.trim();
-      // Skip lines that are mostly numbers/prices
-      if (/^\$?\d+\.?\d*$/.test(text)) return false;
-      // Skip very short lines
-      if (text.length < 3) return false;
-      // Skip common menu headers
-      if (/^(menu|appetizers|entrees|desserts|beverages|drinks)$/i.test(text)) return false;
-      return true;
-    });
-
-    // Translate each menu item
-    const translatedItems = await Promise.all(
-      menuItems.map(async (item, index) => {
-        try {
-          const translated = await translateText(item.trim());
-          return {
-            id: index + 1,
-            original: item.trim(),
-            translated: translated,
-            category: categorizeMenuItem(item.trim()),
-            image: getPlaceholderImage(item.trim()),
-            description: `Translated from: ${item.trim()}`
-          };
-        } catch (error) {
-          console.error(`Failed to translate: ${item}`, error);
-          return {
-            id: index + 1,
-            original: item.trim(),
-            translated: item.trim(), // Fallback to original if translation fails
-            category: 'Other',
-            image: 'https://via.placeholder.com/60x60?text=🍽️',
-            description: 'Translation unavailable'
-          };
-        }
-      })
-    );
-
-    return translatedItems;
+    // First pass: identify categories, dishes, descriptions, prices, and non-menu content
+    const parsedItems = parseMenuStructure(lines);
+    
+    // Second pass: group related content and create menu items
+    const menuItems = await buildMenuItems(parsedItems);
+    
+    return menuItems;
   } catch (error) {
     console.error('Menu processing error:', error);
     throw new Error('Failed to process menu text');
   }
 };
 
-// Simple categorization based on keywords
-const categorizeMenuItem = (itemName) => {
-  const name = itemName.toLowerCase();
+// Parse the menu structure intelligently
+const parseMenuStructure = (lines) => {
+  const parsedItems = [];
   
-  if (name.includes('salad') || name.includes('soup') || name.includes('appetizer') || 
-      name.includes('starter') || name.includes('wings')) {
-    return 'Appetizers';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+    
+    // Skip very short lines or obvious non-menu content
+    if (shouldSkipLine(line)) {
+      continue;
+    }
+    
+    const itemType = identifyLineType(line, nextLine);
+    const price = extractPrice(line);
+    
+    parsedItems.push({
+      text: line,
+      type: itemType,
+      price: price,
+      lineIndex: i
+    });
   }
   
-  if (name.includes('steak') || name.includes('chicken') || name.includes('salmon') || 
-      name.includes('fish') || name.includes('pasta') || name.includes('burger') ||
-      name.includes('entree') || name.includes('main')) {
-    return 'Entrees';
+  return parsedItems;
+};
+
+// Identify what type of content each line contains
+const identifyLineType = (line, nextLine) => {
+  const lowerLine = line.toLowerCase();
+  
+  // Check if it's a category header
+  if (isCategoryHeader(line, nextLine)) {
+    return 'category';
   }
   
-  if (name.includes('cake') || name.includes('pie') || name.includes('ice cream') || 
-      name.includes('dessert') || name.includes('chocolate')) {
-    return 'Desserts';
+  // Check if it's contact info or restaurant details
+  if (isContactInfo(line)) {
+    return 'contact';
   }
   
-  if (name.includes('coffee') || name.includes('tea') || name.includes('juice') || 
-      name.includes('soda') || name.includes('water') || name.includes('drink')) {
-    return 'Beverages';
+  // Check if it's just a price line
+  if (isPriceOnly(line)) {
+    return 'price';
   }
   
-  return 'Other';
+  // Check if it's a dish name (short, no detailed description)
+  if (isDishName(line)) {
+    return 'dish';
+  }
+  
+  // Check if it's a description
+  if (isDescription(line)) {
+    return 'description';
+  }
+  
+  return 'other';
+};
+
+// Check if a line is a category header
+const isCategoryHeader = (line, nextLine) => {
+  const categoryWords = [
+    'appetizer', 'starter', 'entree', 'main', 'dessert', 'beverage', 'drink',
+    'soup', 'salad', 'pasta', 'pizza', 'sandwich', 'burger', 'coffee', 'tea',
+    'wine', 'beer', 'cocktail', 'specials', 'today', 'fresh'
+  ];
+  
+  const lowerLine = line.toLowerCase();
+  
+  // Check if it's all uppercase (common for headers)
+  if (line === line.toUpperCase() && line.length > 3) {
+    return true;
+  }
+  
+  // Check if it contains category words and no price
+  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
+  const hasPrice = extractPrice(line) !== null;
+  
+  if (hasCategory && !hasPrice) {
+    return true;
+  }
+  
+  // Check if next line looks like a dish (indicates this might be a header)
+  if (nextLine && isDishName(nextLine)) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Check if a line contains contact information
+const isContactInfo = (line) => {
+  const contactPatterns = [
+    /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/, // Phone numbers
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, // Email
+    /\bwww\./i,
+    /\bhttp/i,
+    /\bstreet\b/i,
+    /\bavenue\b/i,
+    /\broad\b/i,
+    /\baddress\b/i,
+  ];
+  
+  return contactPatterns.some(pattern => pattern.test(line));
+};
+
+// Check if line is just a price
+const isPriceOnly = (line) => {
+  const pricePattern = /^\$?\d+\.?\d*\$?$/;
+  return pricePattern.test(line.trim());
+};
+
+// Check if line is likely a dish name
+const isDishName = (line) => {
+  // Dish names are usually:
+  // - 2-6 words
+  // - Capitalized
+  // - May contain a price at the end
+  
+  const words = line.trim().split(/\s+/);
+  const wordCount = words.length;
+  
+  // Remove price if present for analysis
+  const lineWithoutPrice = line.replace(/\$\d+\.?\d*|\d+\.?\d*\$?/g, '').trim();
+  const wordsWithoutPrice = lineWithoutPrice.split(/\s+/).filter(w => w.length > 0);
+  
+  // Check characteristics
+  const isReasonableLength = wordsWithoutPrice.length >= 1 && wordsWithoutPrice.length <= 6;
+  const hasCapitalization = /[A-Z]/.test(line);
+  const notTooLong = line.length <= 50;
+  
+  return isReasonableLength && hasCapitalization && notTooLong;
+};
+
+// Check if line is a description
+const isDescription = (line) => {
+  // Descriptions are usually:
+  // - Longer than dish names
+  // - Contain descriptive words
+  // - Lower case or mixed case
+  
+  const descriptiveWords = [
+    'with', 'served', 'topped', 'fresh', 'grilled', 'fried', 'baked',
+    'seasoned', 'marinated', 'sauce', 'dressing', 'cheese', 'vegetables',
+    'herbs', 'spices', 'organic', 'local', 'homemade'
+  ];
+  
+  const lowerLine = line.toLowerCase();
+  const wordCount = line.trim().split(/\s+/).length;
+  
+  const hasDescriptiveWords = descriptiveWords.some(word => lowerLine.includes(word));
+  const isLongEnough = wordCount >= 3;
+  
+  return hasDescriptiveWords && isLongEnough;
+};
+
+// Check if line should be skipped entirely
+const shouldSkipLine = (line) => {
+  // Skip very short lines, pure numbers, or obvious non-menu content
+  if (line.length < 2) return true;
+  
+  const skipPatterns = [
+    /^page \d+/i,
+    /^menu$/i,
+    /^thank you/i,
+    /^visit us/i,
+    /^follow us/i,
+    /^\d+$/,
+    /^-+$/,
+    /^=+$/,
+  ];
+  
+  return skipPatterns.some(pattern => pattern.test(line.trim()));
+};
+
+// Extract price from a line
+const extractPrice = (line) => {
+  const pricePatterns = [
+    /\$(\d+\.?\d*)/,
+    /(\d+\.?\d*)\$/,
+    /£(\d+\.?\d*)/,
+    /€(\d+\.?\d*)/,
+    /¥(\d+\.?\d*)/,
+  ];
+  
+  for (const pattern of pricePatterns) {
+    const match = line.match(pattern);
+    if (match) {
+      return match[1] || match[0];
+    }
+  }
+  
+  return null;
+};
+
+// Build structured menu items from parsed data
+const buildMenuItems = async (parsedItems) => {
+  const menuItems = [];
+  let currentCategory = 'Other';
+  let itemId = 1;
+  
+  for (let i = 0; i < parsedItems.length; i++) {
+    const item = parsedItems[i];
+    
+    if (item.type === 'category') {
+      currentCategory = item.text;
+      continue;
+    }
+    
+    if (item.type === 'contact') {
+      continue; // Skip contact information
+    }
+    
+    if (item.type === 'dish') {
+      // Look for description in next items
+      let description = '';
+      let price = item.price;
+      
+      // Check next few lines for description and price
+      for (let j = i + 1; j < Math.min(i + 3, parsedItems.length); j++) {
+        const nextItem = parsedItems[j];
+        
+        if (nextItem.type === 'description') {
+          description = nextItem.text;
+          if (nextItem.price && !price) {
+            price = nextItem.price;
+          }
+          break;
+        } else if (nextItem.type === 'price' && !price) {
+          price = nextItem.text;
+        } else if (nextItem.type === 'dish' || nextItem.type === 'category') {
+          break; // Stop if we hit another dish or category
+        }
+      }
+      
+      // Clean dish name (remove price if it's there)
+      const dishName = item.text.replace(/\$\d+\.?\d*|\d+\.?\d*\$?/g, '').trim();
+      
+      try {
+        const translated = await translateText(dishName);
+        const translatedDescription = description ? await translateText(description) : '';
+        
+        menuItems.push({
+          id: itemId++,
+          original: dishName,
+          translated: translated,
+          description: description,
+          translatedDescription: translatedDescription,
+          price: price,
+          category: currentCategory,
+          image: getPlaceholderImage(dishName),
+        });
+      } catch (error) {
+        console.error(`Failed to translate: ${dishName}`, error);
+        menuItems.push({
+          id: itemId++,
+          original: dishName,
+          translated: dishName,
+          description: description,
+          translatedDescription: description,
+          price: price,
+          category: currentCategory,
+          image: getPlaceholderImage(dishName),
+        });
+      }
+    }
+  }
+  
+  return menuItems;
 };
 
 // Get placeholder image based on item type
