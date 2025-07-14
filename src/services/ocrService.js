@@ -1,5 +1,4 @@
 import { API_CONFIG, API_URLS } from './config';
-import { RSA } from 'react-native-rsa-native';
 
 // OAuth token cache
 let accessToken = null;
@@ -71,88 +70,13 @@ export const getAccessToken = async () => {
   }
 
   try {
-    // Create JWT header
-    const header = {
-      alg: 'RS256',
-      typ: 'JWT',
-    };
-
-    // Create JWT payload
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: API_CONFIG.SERVICE_ACCOUNT_EMAIL,
-      scope: 'https://www.googleapis.com/auth/cloud-platform',
-      aud: API_CONFIG.TOKEN_URI,
-      exp: now + 3600, // 1 hour
-      iat: now,
-    };
-
-    // Create JWT using proper RSA signing
-    const jwt = await createJWTWithRSA(header, payload, API_CONFIG.PRIVATE_KEY);
-    
-    // Exchange JWT for access token
-    const tokenResponse = await fetch(API_CONFIG.TOKEN_URI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-    });
-
-    const tokenData = await tokenResponse.json();
-    
-    if (tokenData.error) {
-      throw new Error(`Token Error: ${tokenData.error_description}`);
-    }
-
-    // Cache the token
-    accessToken = tokenData.access_token;
-    tokenExpiry = Date.now() + (tokenData.expires_in * 1000) - 60000; // Refresh 1 min early
-    
-    return accessToken;
+    // For now, return mock token since RSA signing is problematic
+    // This will be replaced with proper authentication later
+    throw new Error('Real API authentication not implemented yet');
   } catch (error) {
     console.error('Authentication Error:', error);
     throw error;
   }
-};
-
-// Create JWT with proper RSA-SHA256 signing
-const createJWTWithRSA = async (header, payload, privateKey) => {
-  try {
-    // Base64URL encode header and payload
-    const encodedHeader = base64URLEncode(JSON.stringify(header));
-    const encodedPayload = base64URLEncode(JSON.stringify(payload));
-    
-    // Create signature input
-    const signatureInput = `${encodedHeader}.${encodedPayload}`;
-    
-    // Sign with RSA-SHA256
-    const signature = await RSA.signWithAlgorithm(signatureInput, privateKey, RSA.SHA256withRSA);
-    
-    // Convert signature to base64URL
-    const encodedSignature = base64URLEncode(signature, true);
-    
-    return `${signatureInput}.${encodedSignature}`;
-  } catch (error) {
-    console.error('JWT creation failed:', error);
-    throw new Error('Failed to create JWT token');
-  }
-};
-
-// Utility functions - React Native compatible base64URL encoding using btoa
-const base64URLEncode = (data, isSignature = false) => {
-  let base64;
-  if (isSignature) {
-    // Signature is already base64 encoded
-    base64 = data;
-  } else if (typeof data === 'string') {
-    // Use btoa which is available in React Native
-    base64 = btoa(data);
-  } else {
-    // For other data types, convert to string first
-    base64 = btoa(String(data));
-  }
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 };
 
 // Mock OCR text for development/demo
