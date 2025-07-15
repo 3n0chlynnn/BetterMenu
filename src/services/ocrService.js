@@ -478,39 +478,45 @@ export const sortTextSpatially = (textAnnotations) => {
     columns[columnIndex].push(lineGroup);
   }
   
-  // Reconstruct logical lines from word groups
+  // Reconstruct logical lines from word groups (process left column completely, then right)
   const reconstructedLines = [];
   
+  // Process columns in order (left to right), but complete each column fully
   columns.forEach((column, columnIndex) => {
     if (column.length > 0) {
       console.log(`📊 Column ${columnIndex + 1}: ${column.length} lines`);
-    }
-    
-    column.forEach(lineGroup => {
-      // Combine words in this line, maintaining spacing
-      let lineText = '';
-      let lastX = -1;
       
-      lineGroup.forEach(elem => {
-        // Add appropriate spacing between words
-        if (lastX >= 0) {
-          const gap = elem.x - lastX;
-          if (gap > 40) { // Large gap - probably separate sections
-            lineText += '   '; // Multiple spaces
-          } else if (gap > 15) { // Normal word spacing
-            lineText += ' ';
-          }
-          // Small gaps - words are close, don't add extra space
-        }
+      column.forEach(lineGroup => {
+        // Combine words in this line, maintaining spacing
+        let lineText = '';
+        let lastX = -1;
         
-        lineText += elem.text;
-        lastX = elem.right;
+        lineGroup.forEach(elem => {
+          // Add appropriate spacing between words
+          if (lastX >= 0) {
+            const gap = elem.x - lastX;
+            if (gap > 40) { // Large gap - probably separate sections
+              lineText += '   '; // Multiple spaces
+            } else if (gap > 15) { // Normal word spacing
+              lineText += ' ';
+            }
+            // Small gaps - words are close, don't add extra space
+          }
+          
+          lineText += elem.text;
+          lastX = elem.right;
+        });
+        
+        if (lineText.trim().length > 0) {
+          reconstructedLines.push(lineText.trim());
+        }
       });
       
-      if (lineText.trim().length > 0) {
-        reconstructedLines.push(lineText.trim());
+      // Add a column separator comment for debugging
+      if (columnIndex < columns.length - 1 && column.length > 0) {
+        console.log(`🔄 Finished column ${columnIndex + 1}, moving to column ${columnIndex + 2}`);
       }
-    });
+    }
   });
   
   console.log(`📄 Reconstructed ${reconstructedLines.length} logical lines from ${elementsWithPosition.length} elements`);

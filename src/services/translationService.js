@@ -349,6 +349,14 @@ const shouldSkipLine = (line) => {
     /^\(\d+\)/,           // (949) phone numbers
     /^\d{5}$/,            // zip codes
     /^(suite|dr|st|ave)/i, // address parts
+    // Menu headers and restaurant names
+    /^.+\s+menu$/i,       // "OLIVA Menu", "Restaurant Menu"
+    /^menu\s+/i,          // "Menu 2024"
+    /^\w+\s+menu$/i,      // "Pizza Menu", "Lunch Menu"
+    // Option indicators in parentheses
+    /^\([^)]*\)$/,        // "(Beef/Chicken)", "(Halal)", "(Vegetarian)"
+    /^\([^)]*meat[^)]*\)/i, // "(Choice of meat)"
+    /^\([^)]*option[^)]*\)/i, // "(Options available)"
   ];
   
   return skipPatterns.some(pattern => pattern.test(line.trim()));
@@ -373,29 +381,46 @@ const buildMenuItems = async (parsedItems) => {
     }
     
     if (item.type === 'dish') {
-      // Look for description in next items
+      // Look for description in next items (may span multiple lines)
       let description = '';
       let price = item.price;
+      let descriptionLines = [];
       
       // Check next few lines for description and price
-      for (let j = i + 1; j < Math.min(i + 3, parsedItems.length); j++) {
+      for (let j = i + 1; j < Math.min(i + 5, parsedItems.length); j++) {
         const nextItem = parsedItems[j];
         
         if (nextItem.type === 'description') {
-          description = nextItem.text;
+          descriptionLines.push(nextItem.text);
           if (nextItem.price && !price) {
             price = nextItem.price;
           }
-          break;
         } else if (nextItem.type === 'price' && !price) {
           price = nextItem.text;
+        } else if (nextItem.type === 'other' && 
+                   nextItem.text.length > 10 && 
+                   /[,]/.test(nextItem.text)) {
+          // Likely continuation of description (ingredient list)
+          descriptionLines.push(nextItem.text);
         } else if (nextItem.type === 'dish' || nextItem.type === 'category') {
           break; // Stop if we hit another dish or category
         }
       }
       
-      // Clean dish name (remove price if it's there)
-      const dishName = item.text.replace(/\$\d+\.?\d*|\d+\.?\d*\$?/g, '').trim();
+      // Combine all description lines
+      description = descriptionLines.join(' ').replace(/\s+/g, ' ').trim();
+      
+      // Clean dish name (remove price if it's there and normalize spacing)
+      let dishName = item.text.replace(/\$\d+\.?\d*|\d+\.?\d*\$?|\b\d{1,3}\.?\d{0,2}\b/g, '').trim();
+      dishName = dishName.replace(/\s+/g, ' '); // Normalize multiple spaces
+      
+      // Clean price - remove duplicate dollar signs
+      if (price) {
+        price = price.replace(/\$+/g, '$'); // Replace multiple $ with single $
+        if (!price.startsWith('$') && !/^\d/.test(price)) {
+          price = '$' + price;
+        }
+      }
       
       try {
         const translated = await translateText(dishName);
