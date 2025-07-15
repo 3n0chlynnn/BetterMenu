@@ -7,22 +7,63 @@ const CameraScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState(null);
 
+  // Request media library permissions when component mounts
+  useEffect(() => {
+    (async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Media library permission not granted');
+      }
+    })();
+  }, []);
+
   const takePicture = async () => {
     if (camera) {
-      const photo = await camera.takePictureAsync();
-      navigation.navigate('MenuResult', { imageUri: photo.uri });
+      try {
+        const photo = await camera.takePictureAsync();
+        navigation.navigate('MenuResult', { imageUri: photo.uri });
+      } catch (error) {
+        console.error('Error taking picture:', error);
+        Alert.alert('Error', 'Failed to take picture');
+      }
     }
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
-      allowsEditing: false,
-      quality: 1,
-    });
+    try {
+      console.log('📸 Gallery button pressed - requesting media library permission...');
+      
+      // Request permission first
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('🔑 Media library permission:', permissionResult.status);
+      
+      if (permissionResult.status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please grant permission to access your photo library to select menu images.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
 
-    if (!result.canceled) {
-      navigation.navigate('MenuResult', { imageUri: result.assets[0].uri });
+      console.log('🖼️ Launching image library...');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      console.log('📱 Image picker result:', result);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log('✅ Image selected, navigating to MenuResult...');
+        navigation.navigate('MenuResult', { imageUri: result.assets[0].uri });
+      } else {
+        console.log('❌ Image selection canceled or failed');
+      }
+    } catch (error) {
+      console.error('❌ Error picking image:', error);
+      Alert.alert('Error', 'Failed to open gallery. Please try again.');
     }
   };
 
@@ -57,8 +98,23 @@ const CameraScreen = ({ navigation }) => {
           <View style={styles.captureInner} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.galleryButton} onPress={pickImage}>
+        <TouchableOpacity 
+          style={styles.galleryButton} 
+          onPress={pickImage}
+          activeOpacity={0.7}
+        >
           <Text style={styles.galleryText}>🖼️</Text>
+        </TouchableOpacity>
+        
+        {/* Debug button for testing */}
+        <TouchableOpacity 
+          style={styles.debugButton} 
+          onPress={() => {
+            console.log('🔧 Debug button pressed');
+            Alert.alert('Debug', 'Gallery button should work now!');
+          }}
+        >
+          <Text style={styles.debugText}>🔧</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -105,15 +161,35 @@ const styles = StyleSheet.create({
   galleryButton: {
     position: 'absolute',
     right: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  galleryText: {
+    fontSize: 28,
+    textAlign: 'center',
+  },
+  debugButton: {
+    position: 'absolute',
+    left: 30,
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  galleryText: {
-    fontSize: 24,
+  debugText: {
+    fontSize: 20,
+    textAlign: 'center',
   },
   button: {
     backgroundColor: '#3498db',
