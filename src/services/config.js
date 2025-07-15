@@ -40,7 +40,7 @@ X0DvqNHv3o9DFuFgMnyNOQ==
   TOKEN_URI: 'https://oauth2.googleapis.com/token',
   
   // Enable/disable API usage (set to false to use mock data only)
-  USE_REAL_APIS: true, // Enabled with proper RSA signing using node-forge
+  USE_REAL_APIS: true, // Enabled for dish recognition testing
 };
 
 // API URLs (no API key needed with service account)
