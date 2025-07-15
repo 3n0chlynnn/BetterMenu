@@ -52,7 +52,9 @@ const MenuResultScreen = ({ route, navigation }) => {
 
   // Comprehensive mock data function using the real processing logic
   const getMockMenuItems = async () => {
-    const mockOCRText = `APPETIZERS
+    // Try the comprehensive processing first
+    try {
+      const mockOCRText = `APPETIZERS
 Caesar Salad
 Fresh romaine lettuce with parmesan
 $12.95
@@ -112,19 +114,166 @@ Iced Tea
 Sweet or unsweetened
 $2.95`;
 
-    try {
       const menuItems = await processMenuText(mockOCRText);
-      return menuItems.reduce((acc, item) => {
-        if (!acc[item.category]) {
-          acc[item.category] = [];
-        }
-        acc[item.category].push(item);
-        return acc;
-      }, {});
+      if (menuItems && menuItems.length > 0) {
+        return menuItems.reduce((acc, item) => {
+          if (!acc[item.category]) {
+            acc[item.category] = [];
+          }
+          acc[item.category].push(item);
+          return acc;
+        }, {});
+      }
     } catch (error) {
-      console.error('Mock menu processing failed:', error);
-      return getSimpleMockData();
+      console.error('Comprehensive mock processing failed:', error);
     }
+    
+    // If that fails, use hardcoded comprehensive mock data
+    return getComprehensiveMockData();
+  };
+
+  // Hardcoded comprehensive mock data as fallback
+  const getComprehensiveMockData = () => {
+    const allItems = [
+      // APPETIZERS
+      {
+        id: 1,
+        original: "Caesar Salad",
+        translated: "凯撒沙拉",
+        category: "APPETIZERS",
+        price: "12.95",
+        description: "Fresh romaine lettuce with parmesan",
+        image: "https://via.placeholder.com/60x60?text=🥗"
+      },
+      {
+        id: 2,
+        original: "Tomato Soup",
+        translated: "番茄汤",
+        category: "APPETIZERS", 
+        price: "8.95",
+        description: "Creamy tomato basil soup",
+        image: "https://via.placeholder.com/60x60?text=🍲"
+      },
+      {
+        id: 3,
+        original: "Spinach Artichoke Dip",
+        translated: "菠菜朝鲜蓟蘸酱",
+        category: "APPETIZERS",
+        price: "10.95", 
+        description: "Served with tortilla chips",
+        image: "https://via.placeholder.com/60x60?text=🥗"
+      },
+      // ENTREES
+      {
+        id: 4,
+        original: "Grilled Salmon",
+        translated: "烤三文鱼",
+        category: "ENTREES",
+        price: "24.95",
+        description: "Atlantic salmon with herbs",
+        image: "https://via.placeholder.com/60x60?text=🐟"
+      },
+      {
+        id: 5,
+        original: "Beef Ribeye Steak", 
+        translated: "牛肋眼牛排",
+        category: "ENTREES",
+        price: "32.95",
+        description: "Prime cut with garlic butter",
+        image: "https://via.placeholder.com/60x60?text=🥩"
+      },
+      {
+        id: 6,
+        original: "Chicken Parmesan",
+        translated: "帕尔马干酪鸡肉",
+        category: "ENTREES",
+        price: "19.95",
+        description: "Breaded chicken with marinara",
+        image: "https://via.placeholder.com/60x60?text=🍗"
+      },
+      {
+        id: 7,
+        original: "Pasta Carbonara",
+        translated: "培根蛋面",
+        category: "ENTREES",
+        price: "16.95",
+        description: "Creamy pasta with bacon and parmesan",
+        image: "https://via.placeholder.com/60x60?text=🍝"
+      },
+      {
+        id: 8,
+        original: "Fish Tacos",
+        translated: "鱼肉玉米饼",
+        category: "ENTREES",
+        price: "18.95",
+        description: "Fresh fish with cabbage slaw",
+        image: "https://via.placeholder.com/60x60?text=🐟"
+      },
+      // DESSERTS
+      {
+        id: 9,
+        original: "Chocolate Cake",
+        translated: "巧克力蛋糕",
+        category: "DESSERTS",
+        price: "7.95",
+        description: "Rich chocolate layer cake",
+        image: "https://via.placeholder.com/60x60?text=🍰"
+      },
+      {
+        id: 10,
+        original: "Apple Pie",
+        translated: "苹果派",
+        category: "DESSERTS",
+        price: "6.95",
+        description: "Traditional apple pie with cinnamon",
+        image: "https://via.placeholder.com/60x60?text=🥧"
+      },
+      {
+        id: 11,
+        original: "Tiramisu",
+        translated: "提拉米苏",
+        category: "DESSERTS",
+        price: "8.95",
+        description: "Classic Italian dessert",
+        image: "https://via.placeholder.com/60x60?text=🍰"
+      },
+      // BEVERAGES
+      {
+        id: 12,
+        original: "Coffee",
+        translated: "咖啡",
+        category: "BEVERAGES",
+        price: "3.95",
+        description: "Freshly brewed house blend",
+        image: "https://via.placeholder.com/60x60?text=☕"
+      },
+      {
+        id: 13,
+        original: "Orange Juice",
+        translated: "橙汁",
+        category: "BEVERAGES",
+        price: "4.95",
+        description: "Freshly squeezed",
+        image: "https://via.placeholder.com/60x60?text=🍊"
+      },
+      {
+        id: 14,
+        original: "Iced Tea",
+        translated: "冰茶",
+        category: "BEVERAGES",
+        price: "2.95",
+        description: "Sweet or unsweetened",
+        image: "https://via.placeholder.com/60x60?text=🥤"
+      }
+    ];
+    
+    return allItems.reduce((acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    }, {});
   };
 
   // Simple fallback mock data function (original)

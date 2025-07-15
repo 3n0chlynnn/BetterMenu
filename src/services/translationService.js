@@ -202,45 +202,90 @@ const isPriceOnly = (line) => {
 // Check if line is likely a dish name
 const isDishName = (line) => {
   // Dish names are usually:
-  // - 2-6 words
-  // - Capitalized
+  // - Have some capital letters
   // - May contain a price at the end
+  // - Not too long
+  // - Not just ingredients
   
   const words = line.trim().split(/\s+/);
-  const wordCount = words.length;
   
   // Remove price if present for analysis
   const lineWithoutPrice = line.replace(/\$\d+\.?\d*|\d+\.?\d*\$?/g, '').trim();
   const wordsWithoutPrice = lineWithoutPrice.split(/\s+/).filter(w => w.length > 0);
   
-  // Check characteristics
-  const isReasonableLength = wordsWithoutPrice.length >= 1 && wordsWithoutPrice.length <= 6;
-  const hasCapitalization = /[A-Z]/.test(line);
-  const notTooLong = line.length <= 50;
+  // Skip if no words after removing price
+  if (wordsWithoutPrice.length === 0) return false;
   
-  return isReasonableLength && hasCapitalization && notTooLong;
+  // Check characteristics
+  const hasCapitalization = /[A-Z]/.test(line);
+  const notTooLong = line.length <= 80;
+  const notTooShort = wordsWithoutPrice.length >= 1;
+  
+  // Skip obvious ingredient lists (too many commas)
+  const commaCount = (line.match(/,/g) || []).length;
+  const isIngredientList = commaCount >= 3 && wordsWithoutPrice.length > 6;
+  
+  // Skip lines that are mostly lowercase ingredients
+  const lowercaseWords = wordsWithoutPrice.filter(word => 
+    word.toLowerCase() === word && word.length > 2
+  ).length;
+  const isMainlyLowercase = lowercaseWords > wordsWithoutPrice.length * 0.7;
+  
+  return hasCapitalization && notTooLong && notTooShort && !isIngredientList && !isMainlyLowercase;
 };
 
 // Check if line is a description
 const isDescription = (line) => {
   // Descriptions are usually:
-  // - Longer than dish names
-  // - Contain descriptive words
-  // - Lower case or mixed case
-  
-  const descriptiveWords = [
-    'with', 'served', 'topped', 'fresh', 'grilled', 'fried', 'baked',
-    'seasoned', 'marinated', 'sauce', 'dressing', 'cheese', 'vegetables',
-    'herbs', 'spices', 'organic', 'local', 'homemade'
-  ];
+  // - Ingredient lists with commas
+  // - Cooking methods
+  // - Mostly lowercase (except first letter)
   
   const lowerLine = line.toLowerCase();
   const wordCount = line.trim().split(/\s+/).length;
+  const commaCount = (line.match(/,/g) || []).length;
+  
+  // Common descriptive/ingredient words
+  const descriptiveWords = [
+    'with', 'served', 'topped', 'fresh', 'grilled', 'fried', 'baked',
+    'seasoned', 'marinated', 'sauce', 'dressing', 'cheese', 'lettuce',
+    'tomato', 'onion', 'pepper', 'mushroom', 'olive', 'herbs', 'spices',
+    'organic', 'local', 'homemade', 'mozzarella', 'beef', 'chicken',
+    'spinach', 'avocado', 'pickle', 'cilantro'
+  ];
   
   const hasDescriptiveWords = descriptiveWords.some(word => lowerLine.includes(word));
+  const hasMultipleCommas = commaCount >= 2;
   const isLongEnough = wordCount >= 3;
   
-  return hasDescriptiveWords && isLongEnough;
+  // If it has many commas and descriptive words, it's likely a description
+  return (hasMultipleCommas && isLongEnough) || (hasDescriptiveWords && wordCount >= 4);
+};
+
+// Extract price from a line with better patterns
+const extractPrice = (line) => {
+  const pricePatterns = [
+    /\$(\d+\.?\d*)/,         // $12.99
+    /(\d+\.?\d*)\$/,         // 12.99$
+    /£(\d+\.?\d*)/,          // £12.99
+    /€(\d+\.?\d*)/,          // €12.99
+    /¥(\d+\.?\d*)/,          // ¥12.99
+    /\b(\d{1,3}\.?\d{0,2})\b/ // Plain numbers: 12.99, 15, 8.50
+  ];
+  
+  for (const pattern of pricePatterns) {
+    const match = line.match(pattern);
+    if (match) {
+      const price = match[1] || match[0].replace(/[^\d.]/g, '');
+      // Only return if it looks like a valid price (not a year or random number)
+      const priceNum = parseFloat(price);
+      if (priceNum >= 1 && priceNum <= 200) {
+        return price;
+      }
+    }
+  }
+  
+  return null;
 };
 
 // Check if line should be skipped entirely
@@ -257,29 +302,12 @@ const shouldSkipLine = (line) => {
     /^\d+$/,
     /^-+$/,
     /^=+$/,
+    /^\(\d+\)/,           // (949) phone numbers
+    /^\d{5}$/,            // zip codes
+    /^(suite|dr|st|ave)/i, // address parts
   ];
   
   return skipPatterns.some(pattern => pattern.test(line.trim()));
-};
-
-// Extract price from a line
-const extractPrice = (line) => {
-  const pricePatterns = [
-    /\$(\d+\.?\d*)/,
-    /(\d+\.?\d*)\$/,
-    /£(\d+\.?\d*)/,
-    /€(\d+\.?\d*)/,
-    /¥(\d+\.?\d*)/,
-  ];
-  
-  for (const pattern of pricePatterns) {
-    const match = line.match(pattern);
-    if (match) {
-      return match[1] || match[0];
-    }
-  }
-  
-  return null;
 };
 
 // Build structured menu items from parsed data

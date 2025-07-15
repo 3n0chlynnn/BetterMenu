@@ -202,66 +202,103 @@ const validateMenuPhoto = (text, objects) => {
   const menuKeywords = [
     'menu', 'appetizer', 'entree', 'dessert', 'beverage', 'drink', 'starter',
     'main course', 'soup', 'salad', 'pasta', 'pizza', 'burger', 'sandwich',
-    'coffee', 'tea', 'wine', 'beer', 'cocktail', 'price', '$', '€', '£', '¥'
+    'coffee', 'tea', 'wine', 'beer', 'cocktail', 'special', 'today'
   ];
   
   const menuKeywordCount = menuKeywords.filter(keyword => 
     lowerText.includes(keyword)
   ).length;
   
-  // Check for price patterns
+  // Check for price patterns - MUST HAVE PRICES for a menu
   const pricePatterns = [
-    /\$\d+\.?\d*/g,
-    /\d+\.?\d*\$?/g,
-    /£\d+\.?\d*/g,
-    /€\d+\.?\d*/g,
-    /¥\d+\.?\d*/g
+    /\$\d+\.?\d*/g,         // $12.99
+    /\d+\.?\d*\$/g,         // 12.99$
+    /£\d+\.?\d*/g,          // £12.99
+    /€\d+\.?\d*/g,          // €12.99
+    /¥\d+\.?\d*/g,          // ¥12.99
+    /\b\d{1,3}\.?\d{0,2}\b/g // Plain numbers: 12.99, 15, 8.50 (1-3 digits, optional decimal)
   ];
   
-  const hasPrices = pricePatterns.some(pattern => pattern.test(text));
+  const priceMatches = [];
+  pricePatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) priceMatches.push(...matches);
+  });
   
-  // Check text density (menus usually have lots of text)
+  const hasPrices = priceMatches.length >= 3; // Need at least 3 prices
+  
+  // Check text characteristics
   const wordCount = text.split(/\s+/).length;
   const lineCount = text.split('\n').length;
   
-  // Check for non-menu indicators
+  // Check for NON-menu indicators (computer screens, websites, etc.)
   const nonMenuKeywords = [
-    'street', 'address', 'phone', 'email', 'website', 'http', 'www',
-    'receipt', 'total', 'change', 'thank you', 'visit again'
+    'login', 'password', 'username', 'email', 'website', 'http', 'www', '.com',
+    'download', 'install', 'app', 'software', 'window', 'file', 'folder',
+    'desktop', 'browser', 'chrome', 'firefox', 'safari', 'internet',
+    'google', 'facebook', 'instagram', 'twitter', 'youtube',
+    'receipt', 'total', 'change', 'thank you', 'visit again',
+    'street', 'avenue', 'road', 'address', 'directions', 'map'
   ];
   
   const nonMenuKeywordCount = nonMenuKeywords.filter(keyword => 
     lowerText.includes(keyword)
   ).length;
   
-  // Scoring system
+  // Check for food-related words specifically
+  const foodWords = [
+    'chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'cheese', 'sauce',
+    'grilled', 'fried', 'baked', 'fresh', 'organic', 'served', 'with'
+  ];
+  
+  const foodWordCount = foodWords.filter(word => 
+    lowerText.includes(word)
+  ).length;
+  
+  // Scoring system - more strict
   let score = 0;
   
-  // Positive indicators
-  if (menuKeywordCount >= 3) score += 3;
+  // REQUIRED: Must have prices (strong indicator of menu)
+  if (!hasPrices) score -= 5;
+  else score += 3;
+  
+  // Menu keywords
+  if (menuKeywordCount >= 2) score += 2;
   else if (menuKeywordCount >= 1) score += 1;
   
-  if (hasPrices) score += 2;
-  if (wordCount >= 20) score += 1;
-  if (lineCount >= 10) score += 1;
+  // Food words
+  if (foodWordCount >= 3) score += 2;
+  else if (foodWordCount >= 1) score += 1;
   
-  // Negative indicators
-  if (nonMenuKeywordCount >= 3) score -= 2;
-  if (wordCount < 10) score -= 2;
+  // Text structure
+  if (wordCount >= 20 && lineCount >= 8) score += 1;
   
-  // Decision
-  const isLikelyMenu = score >= 3;
+  // NEGATIVE indicators (very strict)
+  if (nonMenuKeywordCount >= 2) score -= 4;
+  if (nonMenuKeywordCount >= 4) score -= 6;
+  
+  // Check for too much tech-related content
+  const techWords = ['login', 'password', 'download', 'install', 'browser', 'website'];
+  const techWordCount = techWords.filter(word => lowerText.includes(word)).length;
+  if (techWordCount >= 1) score -= 3;
+  
+  // Decision - much stricter threshold
+  const isLikelyMenu = score >= 4;
   
   let reason = '';
   if (!isLikelyMenu) {
-    if (menuKeywordCount === 0) {
+    if (!hasPrices) {
+      reason = 'No prices detected. Menus should have prices like $12.99.';
+    } else if (techWordCount >= 1) {
+      reason = 'This appears to be a computer screen or website.';
+    } else if (nonMenuKeywordCount >= 2) {
+      reason = 'Content doesn\'t match restaurant menu patterns.';
+    } else if (menuKeywordCount === 0) {
       reason = 'No menu-related words found.';
-    } else if (!hasPrices) {
-      reason = 'No prices detected.';
-    } else if (wordCount < 10) {
-      reason = 'Too little text detected.';
+    } else if (wordCount < 20) {
+      reason = 'Too little text detected for a menu.';
     } else {
-      reason = 'Content doesn\'t match menu patterns.';
+      reason = 'This doesn\'t appear to be a restaurant menu.';
     }
   }
   
