@@ -18,6 +18,12 @@ const MenuResultScreen = ({ route, navigation }) => {
         const result = await processMenuPhoto(imageUri);
         
         if (result.success) {
+          console.log('🎉 API Success! Setting menu items...');
+          console.log('📊 Total items from API:', result.totalItems);
+          console.log('📋 Categories found:', Object.keys(result.menuItems));
+          Object.entries(result.menuItems).forEach(([category, items]) => {
+            console.log(`  ${category}: ${items.length} items`);
+          });
           setMenuItems(result.menuItems);
         } else {
           // Check if it's a menu validation error
@@ -27,8 +33,13 @@ const MenuResultScreen = ({ route, navigation }) => {
           }
           
           // Fallback to mock data if API fails
-          console.log('API failed, using mock data:', result.error);
+          console.log('⚠️ API failed, using mock data:', result.error);
           const mockMenuItems = await getMockMenuItems();
+          console.log('🎭 Mock data loaded:');
+          console.log('📋 Mock categories:', Object.keys(mockMenuItems));
+          Object.entries(mockMenuItems).forEach(([category, items]) => {
+            console.log(`  ${category}: ${items.length} items`);
+          });
           setMenuItems(mockMenuItems);
         }
       } catch (err) {
@@ -41,6 +52,11 @@ const MenuResultScreen = ({ route, navigation }) => {
         setError('Failed to process menu. Using demo data.');
         // Use the comprehensive menu processing instead of simple mock
         const mockMenuItems = await getMockMenuItems();
+        console.log('🆘 Fallback mock data loaded:');
+        console.log('📋 Fallback categories:', Object.keys(mockMenuItems));
+        Object.entries(mockMenuItems).forEach(([category, items]) => {
+          console.log(`  ${category}: ${items.length} items`);
+        });
         setMenuItems(mockMenuItems);
       } finally {
         setLoading(false);
@@ -357,6 +373,12 @@ $2.95`;
         <Image source={{ uri: imageUri }} style={styles.originalImage} />
         
         <Text style={styles.sectionTitle}>Translated Menu</Text>
+        
+        {/* Debug info */}
+        {console.log('🎨 RENDERING - Current menuItems:', Object.keys(menuItems))}
+        {Object.entries(menuItems).forEach(([category, items]) => {
+          console.log(`🎨 RENDERING ${category}: ${items.length} items`);
+        })}
         
         {Object.entries(menuItems).map(([category, items]) => (
           <View key={category}>
