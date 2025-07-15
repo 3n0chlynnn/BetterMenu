@@ -320,42 +320,54 @@ const validateMenuPhoto = (text, objects) => {
   return { isLikelyMenu, score, reason };
 };
 
-// Detect if the menu has a column-based layout
+// Detect if the menu has a column-based layout using gap analysis
 const detectColumnLayout = (textAnnotations) => {
   if (!textAnnotations || textAnnotations.length < 10) return false;
   
-  // Get X coordinates of all text elements
-  const xCoordinates = textAnnotations.map(annotation => {
+  // Get X coordinates and widths of all text elements
+  const elements = textAnnotations.map(annotation => {
     const vertices = annotation.boundingPoly?.vertices || [];
-    if (vertices.length === 0) return 0;
-    // Use the left edge of the bounding box
-    return vertices[0].x || 0;
-  }).filter(x => x > 0);
+    if (vertices.length === 0) return null;
+    const x = vertices[0].x || 0;
+    const width = vertices.length >= 2 ? Math.abs((vertices[1].x || 0) - x) : 50; // Default width
+    return { x, width, right: x + width };
+  }).filter(elem => elem !== null);
   
-  if (xCoordinates.length < 10) return false;
+  if (elements.length < 10) return false;
   
-  // Find distinct X positions (potential column starts)
-  xCoordinates.sort((a, b) => a - b);
-  const clusters = [];
-  let currentCluster = [xCoordinates[0]];
+  // Sort by X position
+  elements.sort((a, b) => a.x - b.x);
   
-  for (let i = 1; i < xCoordinates.length; i++) {
-    // If X coordinate is within 50 pixels of current cluster, add to cluster
-    if (xCoordinates[i] - currentCluster[0] <= 50) {
-      currentCluster.push(xCoordinates[i]);
-    } else {
-      // Start new cluster
-      clusters.push(currentCluster);
-      currentCluster = [xCoordinates[i]];
+  // Find significant gaps between elements (potential column separators)
+  const gaps = [];
+  for (let i = 0; i < elements.length - 1; i++) {
+    const currentRight = elements[i].right;
+    const nextLeft = elements[i + 1].x;
+    const gap = nextLeft - currentRight;
+    
+    // Only consider significant gaps (>100px) as potential column separators
+    if (gap > 100) {
+      gaps.push({
+        start: currentRight,
+        end: nextLeft,
+        width: gap,
+        midpoint: (currentRight + nextLeft) / 2
+      });
     }
   }
-  clusters.push(currentCluster);
   
-  // If we have 2+ distinct column positions and significant text in each, it's likely columnar
-  const significantClusters = clusters.filter(cluster => cluster.length >= 3);
-  const hasColumns = significantClusters.length >= 2;
+  // Filter out small gaps and keep only major column separators
+  const significantGaps = gaps.filter(gap => gap.width > 150);
   
-  console.log(`🔍 Column detection: ${clusters.length} clusters, ${significantClusters.length} significant → ${hasColumns ? 'COLUMNAR' : 'LINEAR'}`);
+  console.log(`🔍 Gap analysis: Found ${gaps.length} gaps >100px, ${significantGaps.length} significant gaps >150px`);
+  significantGaps.forEach((gap, index) => {
+    console.log(`  Gap ${index + 1}: ${gap.width.toFixed(0)}px wide at X=${gap.midpoint.toFixed(0)}`);
+  });
+  
+  // If we have 1+ significant gaps, it's likely columnar (2+ columns)
+  const hasColumns = significantGaps.length >= 1;
+  
+  console.log(`🔍 Column detection: ${hasColumns ? 'COLUMNAR' : 'LINEAR'} (${significantGaps.length + 1} columns)`);
   
   return hasColumns;
 };
@@ -369,14 +381,15 @@ export const sortTextSpatially = (textAnnotations) => {
     const vertices = annotation.boundingPoly?.vertices || [];
     const x = vertices.length > 0 ? (vertices[0].x || 0) : 0;
     const y = vertices.length > 0 ? (vertices[0].y || 0) : 0;
-    const width = vertices.length >= 2 ? Math.abs((vertices[1].x || 0) - (vertices[0].x || 0)) : 0;
-    const height = vertices.length >= 3 ? Math.abs((vertices[2].y || 0) - (vertices[0].y || 0)) : 0;
+    const width = vertices.length >= 2 ? Math.abs((vertices[1].x || 0) - (vertices[0].x || 0)) : 50;
+    const height = vertices.length >= 3 ? Math.abs((vertices[2].y || 0) - (vertices[0].y || 0)) : 20;
     return {
       text: annotation.description || '',
       x,
       y,
       width,
       height,
+      right: x + width,
       annotation
     };
   }).filter(elem => elem.text.trim().length > 0);
@@ -385,12 +398,12 @@ export const sortTextSpatially = (textAnnotations) => {
   const lineGroups = [];
   
   for (const elem of elementsWithPosition) {
-    // Find existing line group this element belongs to (within 10 pixels Y tolerance)
+    // Find existing line group this element belongs to (within 15 pixels Y tolerance)
     let addedToLine = false;
     
     for (const lineGroup of lineGroups) {
       const avgY = lineGroup.reduce((sum, e) => sum + e.y, 0) / lineGroup.length;
-      if (Math.abs(elem.y - avgY) <= 10) {
+      if (Math.abs(elem.y - avgY) <= 15) {
         lineGroup.push(elem);
         addedToLine = true;
         break;
@@ -414,59 +427,64 @@ export const sortTextSpatially = (textAnnotations) => {
     return avgYA - avgYB;
   });
   
-  // Detect columns within the reconstructed lines
-  const allXCoordinates = elementsWithPosition.map(elem => elem.x);
-  allXCoordinates.sort((a, b) => a - b);
+  // Find column boundaries using gap analysis (same as detection function)
+  const allElements = elementsWithPosition.slice().sort((a, b) => a.x - b.x);
+  const columnSeparators = [];
   
-  // Find column boundaries using clustering
-  const clusters = [];
-  let currentCluster = [allXCoordinates[0]];
-  
-  for (let i = 1; i < allXCoordinates.length; i++) {
-    if (allXCoordinates[i] - currentCluster[0] <= 60) { // Increased tolerance for words
-      currentCluster.push(allXCoordinates[i]);
-    } else {
-      clusters.push(currentCluster);
-      currentCluster = [allXCoordinates[i]];
+  for (let i = 0; i < allElements.length - 1; i++) {
+    const currentRight = allElements[i].right;
+    const nextLeft = allElements[i + 1].x;
+    const gap = nextLeft - currentRight;
+    
+    // Only significant gaps (>150px) are column separators
+    if (gap > 150) {
+      columnSeparators.push((currentRight + nextLeft) / 2);
     }
   }
-  clusters.push(currentCluster);
   
-  // Determine column boundaries
-  const columnBoundaries = clusters.map(cluster => {
-    return {
-      minX: Math.min(...cluster),
-      maxX: Math.max(...cluster),
-      centerX: cluster.reduce((sum, x) => sum + x, 0) / cluster.length
-    };
+  // Remove duplicate separators (within 50px of each other)
+  const uniqueSeparators = [];
+  for (const separator of columnSeparators) {
+    if (!uniqueSeparators.some(existing => Math.abs(existing - separator) < 50)) {
+      uniqueSeparators.push(separator);
+    }
+  }
+  uniqueSeparators.sort((a, b) => a - b);
+  
+  console.log(`📊 Gap-based columns: Found ${uniqueSeparators.length} separators → ${uniqueSeparators.length + 1} columns`);
+  uniqueSeparators.forEach((sep, index) => {
+    console.log(`  Column separator ${index + 1}: X=${sep.toFixed(0)}`);
   });
   
-  // Group lines by columns
-  const columns = columnBoundaries.map(() => []);
+  // Assign lines to columns based on their starting X position
+  const columns = [];
+  for (let i = 0; i <= uniqueSeparators.length; i++) {
+    columns.push([]);
+  }
   
   for (const lineGroup of lineGroups) {
     const lineStartX = Math.min(...lineGroup.map(elem => elem.x));
     
     // Find which column this line belongs to
-    let assignedColumn = 0;
-    let minDistance = Infinity;
-    
-    columnBoundaries.forEach((boundary, index) => {
-      const distance = Math.abs(lineStartX - boundary.centerX);
-      if (distance < minDistance) {
-        minDistance = distance;
-        assignedColumn = index;
+    let columnIndex = 0;
+    for (let i = 0; i < uniqueSeparators.length; i++) {
+      if (lineStartX > uniqueSeparators[i]) {
+        columnIndex = i + 1;
+      } else {
+        break;
       }
-    });
+    }
     
-    columns[assignedColumn].push(lineGroup);
+    columns[columnIndex].push(lineGroup);
   }
   
   // Reconstruct logical lines from word groups
   const reconstructedLines = [];
   
   columns.forEach((column, columnIndex) => {
-    console.log(`📊 Column ${columnIndex + 1}: ${column.length} lines`);
+    if (column.length > 0) {
+      console.log(`📊 Column ${columnIndex + 1}: ${column.length} lines`);
+    }
     
     column.forEach(lineGroup => {
       // Combine words in this line, maintaining spacing
@@ -477,16 +495,16 @@ export const sortTextSpatially = (textAnnotations) => {
         // Add appropriate spacing between words
         if (lastX >= 0) {
           const gap = elem.x - lastX;
-          if (gap > 30) { // Large gap - probably separate sections
+          if (gap > 40) { // Large gap - probably separate sections
             lineText += '   '; // Multiple spaces
-          } else if (gap > 10) { // Normal word spacing
+          } else if (gap > 15) { // Normal word spacing
             lineText += ' ';
           }
           // Small gaps - words are close, don't add extra space
         }
         
         lineText += elem.text;
-        lastX = elem.x + elem.width;
+        lastX = elem.right;
       });
       
       if (lineText.trim().length > 0) {
@@ -496,7 +514,6 @@ export const sortTextSpatially = (textAnnotations) => {
   });
   
   console.log(`📄 Reconstructed ${reconstructedLines.length} logical lines from ${elementsWithPosition.length} elements`);
-  console.log(`🏛️ Found ${columnBoundaries.length} columns`);
   
   return reconstructedLines;
 };
