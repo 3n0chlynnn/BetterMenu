@@ -8,7 +8,11 @@ let tokenExpiry = null;
 export const extractTextFromImage = async (imageUri) => {
   // If APIs are disabled, return demo text
   if (!API_CONFIG.USE_REAL_APIS) {
-    return getMockOCRText();
+    return {
+      text: getMockOCRText(),
+      spatialElements: [],
+      hasColumnLayout: false
+    };
   }
 
   try {
@@ -58,7 +62,9 @@ export const extractTextFromImage = async (imageUri) => {
       throw new Error(`Vision API Error: ${result.error.message}`);
     }
 
+    // Get both linear text and spatial text elements
     const detectedText = result.responses[0]?.textAnnotations?.[0]?.description || '';
+    const textAnnotations = result.responses[0]?.textAnnotations || [];
     const objects = result.responses[0]?.localizedObjectAnnotations || [];
     
     // Validate if this looks like a menu
@@ -67,7 +73,12 @@ export const extractTextFromImage = async (imageUri) => {
       throw new Error(`This doesn't appear to be a menu. ${menuValidation.reason}`);
     }
     
-    return detectedText;
+    // Return both linear text and spatial data
+    return {
+      text: detectedText,
+      spatialElements: textAnnotations.slice(1), // Skip the first element (full text)
+      hasColumnLayout: detectColumnLayout(textAnnotations.slice(1))
+    };
   } catch (error) {
     console.error('OCR Error:', error);
     // If it's a validation error, re-throw it to show to user
@@ -75,7 +86,11 @@ export const extractTextFromImage = async (imageUri) => {
       throw error;
     }
     // Otherwise fallback to mock data
-    return getMockOCRText();
+    return {
+      text: getMockOCRText(),
+      spatialElements: [],
+      hasColumnLayout: false
+    };
   }
 };
 
@@ -303,6 +318,118 @@ const validateMenuPhoto = (text, objects) => {
   }
   
   return { isLikelyMenu, score, reason };
+};
+
+// Detect if the menu has a column-based layout
+const detectColumnLayout = (textAnnotations) => {
+  if (!textAnnotations || textAnnotations.length < 10) return false;
+  
+  // Get X coordinates of all text elements
+  const xCoordinates = textAnnotations.map(annotation => {
+    const vertices = annotation.boundingPoly?.vertices || [];
+    if (vertices.length === 0) return 0;
+    // Use the left edge of the bounding box
+    return vertices[0].x || 0;
+  }).filter(x => x > 0);
+  
+  if (xCoordinates.length < 10) return false;
+  
+  // Find distinct X positions (potential column starts)
+  xCoordinates.sort((a, b) => a - b);
+  const clusters = [];
+  let currentCluster = [xCoordinates[0]];
+  
+  for (let i = 1; i < xCoordinates.length; i++) {
+    // If X coordinate is within 50 pixels of current cluster, add to cluster
+    if (xCoordinates[i] - currentCluster[0] <= 50) {
+      currentCluster.push(xCoordinates[i]);
+    } else {
+      // Start new cluster
+      clusters.push(currentCluster);
+      currentCluster = [xCoordinates[i]];
+    }
+  }
+  clusters.push(currentCluster);
+  
+  // If we have 2+ distinct column positions and significant text in each, it's likely columnar
+  const significantClusters = clusters.filter(cluster => cluster.length >= 3);
+  const hasColumns = significantClusters.length >= 2;
+  
+  console.log(`🔍 Column detection: ${clusters.length} clusters, ${significantClusters.length} significant → ${hasColumns ? 'COLUMNAR' : 'LINEAR'}`);
+  
+  return hasColumns;
+};
+
+// Sort text elements spatially (column-aware)
+export const sortTextSpatially = (textAnnotations) => {
+  if (!textAnnotations || textAnnotations.length === 0) return [];
+  
+  // Extract position data
+  const elementsWithPosition = textAnnotations.map(annotation => {
+    const vertices = annotation.boundingPoly?.vertices || [];
+    const x = vertices.length > 0 ? (vertices[0].x || 0) : 0;
+    const y = vertices.length > 0 ? (vertices[0].y || 0) : 0;
+    return {
+      text: annotation.description || '',
+      x,
+      y,
+      annotation
+    };
+  }).filter(elem => elem.text.trim().length > 0);
+  
+  // Detect columns based on X coordinates
+  const xCoordinates = elementsWithPosition.map(elem => elem.x);
+  xCoordinates.sort((a, b) => a - b);
+  
+  // Find column boundaries
+  const columns = [];
+  let currentColumn = { minX: xCoordinates[0], maxX: xCoordinates[0], elements: [] };
+  
+  for (const elem of elementsWithPosition) {
+    // Find which column this element belongs to
+    let assignedToColumn = false;
+    
+    for (const column of columns) {
+      // If element is within existing column range (with some tolerance)
+      if (elem.x >= column.minX - 30 && elem.x <= column.maxX + 100) {
+        column.elements.push(elem);
+        column.minX = Math.min(column.minX, elem.x);
+        column.maxX = Math.max(column.maxX, elem.x);
+        assignedToColumn = true;
+        break;
+      }
+    }
+    
+    if (!assignedToColumn) {
+      // Create new column
+      columns.push({
+        minX: elem.x,
+        maxX: elem.x,
+        elements: [elem]
+      });
+    }
+  }
+  
+  // Sort columns by X position (left to right)
+  columns.sort((a, b) => a.minX - b.minX);
+  
+  // Sort elements within each column by Y position (top to bottom)
+  columns.forEach(column => {
+    column.elements.sort((a, b) => a.y - b.y);
+  });
+  
+  console.log(`📊 Spatial sorting: Found ${columns.length} columns`);
+  columns.forEach((column, index) => {
+    console.log(`  Column ${index + 1}: ${column.elements.length} elements, X range: ${column.minX}-${column.maxX}`);
+  });
+  
+  // Combine all elements in correct order (left column first, top to bottom, then right column, etc.)
+  const sortedElements = [];
+  columns.forEach(column => {
+    sortedElements.push(...column.elements.map(elem => elem.text));
+  });
+  
+  return sortedElements;
 };
 
 // Mock OCR text for development/demo

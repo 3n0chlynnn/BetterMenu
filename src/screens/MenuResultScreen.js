@@ -20,6 +20,8 @@ const MenuResultScreen = ({ route, navigation }) => {
         if (result.success) {
           console.log('🎉 API Success! Setting menu items...');
           console.log('📊 Total items from API:', result.totalItems);
+          console.log('🏗️ Layout detected:', result.layoutType || 'unknown');
+          console.log('📍 Spatial elements processed:', result.spatialElements || 0);
           console.log('📋 Categories found:', Object.keys(result.menuItems));
           Object.entries(result.menuItems).forEach(([category, items]) => {
             console.log(`  ${category}: ${items.length} items`);
