@@ -7,16 +7,6 @@ const CameraScreen = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState(null);
 
-  // Request media library permissions when component mounts
-  useEffect(() => {
-    (async () => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Media library permission not granted');
-      }
-    })();
-  }, []);
-
   const takePicture = async () => {
     if (camera) {
       try {
@@ -31,35 +21,21 @@ const CameraScreen = ({ navigation }) => {
 
   const pickImage = async () => {
     try {
-      console.log('📸 Gallery button pressed - requesting media library permission...');
+      console.log('📸 Gallery button pressed');
       
-      // Request permission first
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('🔑 Media library permission:', permissionResult.status);
-      
-      if (permissionResult.status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please grant permission to access your photo library to select menu images.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      console.log('🖼️ Launching image library...');
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 1,
       });
 
       console.log('📱 Image picker result:', result);
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (!result.canceled) {
         console.log('✅ Image selected, navigating to MenuResult...');
         navigation.navigate('MenuResult', { imageUri: result.assets[0].uri });
       } else {
-        console.log('❌ Image selection canceled or failed');
+        console.log('❌ Image selection canceled');
       }
     } catch (error) {
       console.error('❌ Error picking image:', error);
