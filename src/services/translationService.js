@@ -71,14 +71,19 @@ const getMockTranslation = (text) => {
 // Function to intelligently parse and process menu text
 export const processMenuText = async (extractedText) => {
   try {
+    console.log('🔍 Processing menu text, total length:', extractedText.length);
+    
     // Split text into lines for analysis
     const lines = extractedText.split('\n').filter(line => line.trim().length > 0);
+    console.log('📋 Total lines after filtering:', lines.length);
     
     // First pass: identify categories, dishes, descriptions, prices, and non-menu content
     const parsedItems = parseMenuStructure(lines);
+    console.log('🏗️ Parsed items:', parsedItems.length);
     
     // Second pass: group related content and create menu items
     const menuItems = await buildMenuItems(parsedItems);
+    console.log('🍽️ Final menu items found:', menuItems.length);
     
     return menuItems;
   } catch (error) {
@@ -102,6 +107,8 @@ const parseMenuStructure = (lines) => {
     
     const itemType = identifyLineType(line, nextLine);
     const price = extractPrice(line);
+    
+    console.log(`📝 Line: "${line}" → Type: ${itemType}, Price: ${price}`);
     
     parsedItems.push({
       text: line,
