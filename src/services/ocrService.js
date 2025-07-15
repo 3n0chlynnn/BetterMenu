@@ -360,7 +360,7 @@ const detectColumnLayout = (textAnnotations) => {
   return hasColumns;
 };
 
-// Sort text elements spatially (column-aware)
+// Sort text elements spatially (column-aware) and reconstruct logical lines
 export const sortTextSpatially = (textAnnotations) => {
   if (!textAnnotations || textAnnotations.length === 0) return [];
   
@@ -369,67 +369,136 @@ export const sortTextSpatially = (textAnnotations) => {
     const vertices = annotation.boundingPoly?.vertices || [];
     const x = vertices.length > 0 ? (vertices[0].x || 0) : 0;
     const y = vertices.length > 0 ? (vertices[0].y || 0) : 0;
+    const width = vertices.length >= 2 ? Math.abs((vertices[1].x || 0) - (vertices[0].x || 0)) : 0;
+    const height = vertices.length >= 3 ? Math.abs((vertices[2].y || 0) - (vertices[0].y || 0)) : 0;
     return {
       text: annotation.description || '',
       x,
       y,
+      width,
+      height,
       annotation
     };
   }).filter(elem => elem.text.trim().length > 0);
   
-  // Detect columns based on X coordinates
-  const xCoordinates = elementsWithPosition.map(elem => elem.x);
-  xCoordinates.sort((a, b) => a - b);
-  
-  // Find column boundaries
-  const columns = [];
-  let currentColumn = { minX: xCoordinates[0], maxX: xCoordinates[0], elements: [] };
+  // Group elements into logical lines first (by Y coordinate proximity)
+  const lineGroups = [];
   
   for (const elem of elementsWithPosition) {
-    // Find which column this element belongs to
-    let assignedToColumn = false;
+    // Find existing line group this element belongs to (within 10 pixels Y tolerance)
+    let addedToLine = false;
     
-    for (const column of columns) {
-      // If element is within existing column range (with some tolerance)
-      if (elem.x >= column.minX - 30 && elem.x <= column.maxX + 100) {
-        column.elements.push(elem);
-        column.minX = Math.min(column.minX, elem.x);
-        column.maxX = Math.max(column.maxX, elem.x);
-        assignedToColumn = true;
+    for (const lineGroup of lineGroups) {
+      const avgY = lineGroup.reduce((sum, e) => sum + e.y, 0) / lineGroup.length;
+      if (Math.abs(elem.y - avgY) <= 10) {
+        lineGroup.push(elem);
+        addedToLine = true;
         break;
       }
     }
     
-    if (!assignedToColumn) {
-      // Create new column
-      columns.push({
-        minX: elem.x,
-        maxX: elem.x,
-        elements: [elem]
-      });
+    if (!addedToLine) {
+      lineGroups.push([elem]);
     }
   }
   
-  // Sort columns by X position (left to right)
-  columns.sort((a, b) => a.minX - b.minX);
-  
-  // Sort elements within each column by Y position (top to bottom)
-  columns.forEach(column => {
-    column.elements.sort((a, b) => a.y - b.y);
+  // Sort elements within each line by X coordinate (left to right)
+  lineGroups.forEach(lineGroup => {
+    lineGroup.sort((a, b) => a.x - b.x);
   });
   
-  console.log(`📊 Spatial sorting: Found ${columns.length} columns`);
-  columns.forEach((column, index) => {
-    console.log(`  Column ${index + 1}: ${column.elements.length} elements, X range: ${column.minX}-${column.maxX}`);
+  // Sort line groups by Y coordinate (top to bottom)
+  lineGroups.sort((a, b) => {
+    const avgYA = a.reduce((sum, e) => sum + e.y, 0) / a.length;
+    const avgYB = b.reduce((sum, e) => sum + e.y, 0) / b.length;
+    return avgYA - avgYB;
   });
   
-  // Combine all elements in correct order (left column first, top to bottom, then right column, etc.)
-  const sortedElements = [];
-  columns.forEach(column => {
-    sortedElements.push(...column.elements.map(elem => elem.text));
+  // Detect columns within the reconstructed lines
+  const allXCoordinates = elementsWithPosition.map(elem => elem.x);
+  allXCoordinates.sort((a, b) => a - b);
+  
+  // Find column boundaries using clustering
+  const clusters = [];
+  let currentCluster = [allXCoordinates[0]];
+  
+  for (let i = 1; i < allXCoordinates.length; i++) {
+    if (allXCoordinates[i] - currentCluster[0] <= 60) { // Increased tolerance for words
+      currentCluster.push(allXCoordinates[i]);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [allXCoordinates[i]];
+    }
+  }
+  clusters.push(currentCluster);
+  
+  // Determine column boundaries
+  const columnBoundaries = clusters.map(cluster => {
+    return {
+      minX: Math.min(...cluster),
+      maxX: Math.max(...cluster),
+      centerX: cluster.reduce((sum, x) => sum + x, 0) / cluster.length
+    };
   });
   
-  return sortedElements;
+  // Group lines by columns
+  const columns = columnBoundaries.map(() => []);
+  
+  for (const lineGroup of lineGroups) {
+    const lineStartX = Math.min(...lineGroup.map(elem => elem.x));
+    
+    // Find which column this line belongs to
+    let assignedColumn = 0;
+    let minDistance = Infinity;
+    
+    columnBoundaries.forEach((boundary, index) => {
+      const distance = Math.abs(lineStartX - boundary.centerX);
+      if (distance < minDistance) {
+        minDistance = distance;
+        assignedColumn = index;
+      }
+    });
+    
+    columns[assignedColumn].push(lineGroup);
+  }
+  
+  // Reconstruct logical lines from word groups
+  const reconstructedLines = [];
+  
+  columns.forEach((column, columnIndex) => {
+    console.log(`📊 Column ${columnIndex + 1}: ${column.length} lines`);
+    
+    column.forEach(lineGroup => {
+      // Combine words in this line, maintaining spacing
+      let lineText = '';
+      let lastX = -1;
+      
+      lineGroup.forEach(elem => {
+        // Add appropriate spacing between words
+        if (lastX >= 0) {
+          const gap = elem.x - lastX;
+          if (gap > 30) { // Large gap - probably separate sections
+            lineText += '   '; // Multiple spaces
+          } else if (gap > 10) { // Normal word spacing
+            lineText += ' ';
+          }
+          // Small gaps - words are close, don't add extra space
+        }
+        
+        lineText += elem.text;
+        lastX = elem.x + elem.width;
+      });
+      
+      if (lineText.trim().length > 0) {
+        reconstructedLines.push(lineText.trim());
+      }
+    });
+  });
+  
+  console.log(`📄 Reconstructed ${reconstructedLines.length} logical lines from ${elementsWithPosition.length} elements`);
+  console.log(`🏛️ Found ${columnBoundaries.length} columns`);
+  
+  return reconstructedLines;
 };
 
 // Mock OCR text for development/demo
