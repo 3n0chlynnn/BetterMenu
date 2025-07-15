@@ -156,28 +156,43 @@ const identifyLineType = (line, nextLine) => {
 // Check if a line is a category header
 const isCategoryHeader = (line, nextLine) => {
   const categoryWords = [
-    'appetizer', 'starter', 'entree', 'main', 'dessert', 'beverage', 'drink',
-    'soup', 'salad', 'pasta', 'pizza', 'sandwich', 'burger', 'coffee', 'tea',
-    'wine', 'beer', 'cocktail', 'specials', 'today', 'fresh'
+    'pizza', 'sandwich', 'appetizer', 'starter', 'entree', 'main', 'dessert', 'beverage', 'drink',
+    'soup', 'salad', 'pasta', 'burger', 'coffee', 'tea', 'wine', 'beer', 'cocktail', 
+    'specials', 'today', 'fresh', 'healthy', 'wraps', 'side', 'sides'
   ];
   
-  const lowerLine = line.toLowerCase();
+  const lowerLine = line.toLowerCase().trim();
   
-  // Check if it's all uppercase (common for headers)
-  if (line === line.toUpperCase() && line.length > 3) {
-    return true;
-  }
-  
-  // Check if it contains category words and no price
-  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
+  // Skip if it has a price (categories don't have prices)
   const hasPrice = extractPrice(line) !== null;
+  if (hasPrice) return false;
   
-  if (hasCategory && !hasPrice) {
+  // Skip addresses and contact info
+  if (/\b(street|ave|avenue|road|dr|drive|suite|ca|zip|\d{5}|phone|email)\b/i.test(line)) {
+    return false;
+  }
+  
+  // Skip single ingredient words
+  const singleIngredients = [
+    'oregano', 'mozzarella', 'pepperoni', 'cheese', 'lettuce', 'tomato', 'mushroom',
+    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles'
+  ];
+  if (singleIngredients.includes(lowerLine)) {
+    return false;
+  }
+  
+  // Check if it's all uppercase (common for headers) AND short
+  if (line === line.toUpperCase() && line.length > 3 && line.length < 20) {
     return true;
   }
   
-  // Check if next line looks like a dish (indicates this might be a header)
-  if (nextLine && isDishName(nextLine)) {
+  // Check if it contains category words and is reasonably short
+  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
+  const isShort = line.length < 30; // Categories are usually short
+  const hasCommas = (line.match(/,/g) || []).length;
+  const isNotIngredientList = hasCommas < 2; // Categories don't have many commas
+  
+  if (hasCategory && isShort && isNotIngredientList) {
     return true;
   }
   
@@ -208,37 +223,59 @@ const isPriceOnly = (line) => {
 
 // Check if line is likely a dish name
 const isDishName = (line) => {
-  // Dish names are usually:
-  // - Have some capital letters
-  // - May contain a price at the end
-  // - Not too long
-  // - Not just ingredients
-  
-  const words = line.trim().split(/\s+/);
-  
   // Remove price if present for analysis
-  const lineWithoutPrice = line.replace(/\$\d+\.?\d*|\d+\.?\d*\$?/g, '').trim();
+  const lineWithoutPrice = line.replace(/\$\d+\.?\d*|\d+\.?\d*\$?|\b\d{1,3}\.?\d{0,2}\b/g, '').trim();
   const wordsWithoutPrice = lineWithoutPrice.split(/\s+/).filter(w => w.length > 0);
   
   // Skip if no words after removing price
   if (wordsWithoutPrice.length === 0) return false;
   
-  // Check characteristics
+  // Skip single ingredient words
+  const singleIngredients = [
+    'oregano', 'mozzarella', 'pepperoni', 'cheese', 'lettuce', 'tomato', 'mushroom',
+    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles'
+  ];
+  if (wordsWithoutPrice.length === 1 && 
+      singleIngredients.includes(lineWithoutPrice.toLowerCase())) {
+    return false;
+  }
+  
+  // Skip obvious non-dish content
+  const skipPatterns = [
+    /\b(street|ave|avenue|road|dr|drive|suite|ca|zip|phone|email)\b/i,
+    /^\$\d+\.?\d*$/,  // Just a price
+    /^\(\d+\)/, // Phone numbers
+    /^on\s+(baguette|flat\s+bread|whole\s+wheat)/i, // Descriptions starting with "on"
+  ];
+  
+  if (skipPatterns.some(pattern => pattern.test(line))) {
+    return false;
+  }
+  
+  // Dish characteristics - be more permissive
   const hasCapitalization = /[A-Z]/.test(line);
-  const notTooLong = line.length <= 80;
+  const notTooLong = line.length <= 100; // Increased from 80
   const notTooShort = wordsWithoutPrice.length >= 1;
   
   // Skip obvious ingredient lists (too many commas)
   const commaCount = (line.match(/,/g) || []).length;
-  const isIngredientList = commaCount >= 3 && wordsWithoutPrice.length > 6;
+  const isIngredientList = commaCount >= 4; // Increased threshold from 3
   
-  // Skip lines that are mostly lowercase ingredients
-  const lowercaseWords = wordsWithoutPrice.filter(word => 
-    word.toLowerCase() === word && word.length > 2
-  ).length;
-  const isMainlyLowercase = lowercaseWords > wordsWithoutPrice.length * 0.7;
+  // Common dish name patterns
+  const dishPatterns = [
+    /\b(pizza|sandwich|wrap|salad|burger|chicken|beef|fish|pasta|soup)\b/i,
+    /\b(special|deluxe|supreme|classic|traditional)\b/i,
+    /\b(halal|veggie|vegetarian|crispy|grilled|fried)\b/i
+  ];
   
-  return hasCapitalization && notTooLong && notTooShort && !isIngredientList && !isMainlyLowercase;
+  const hasDishKeywords = dishPatterns.some(pattern => pattern.test(line));
+  
+  // More permissive logic
+  const isLikelyDish = hasCapitalization && notTooLong && notTooShort && 
+                       !isIngredientList && 
+                       (hasDishKeywords || wordsWithoutPrice.length <= 4);
+  
+  return isLikelyDish;
 };
 
 // Check if line is a description
