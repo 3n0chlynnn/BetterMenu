@@ -62,8 +62,9 @@ src/
 - ✅ Basic navigation setup
 - ✅ UI/UX mockup with sample data
 - ✅ Camera integration
-- ⏳ OCR integration (planned)
-- ⏳ Translation API (planned)
+- ✅ Google Vision API OCR integration with adaptive column detection
+- ✅ Google Translate API integration (with some auth issues)
+- ✅ Advanced menu text parsing and classification
 - ⏳ Food photo/review APIs (planned)
 
 ## Development Notes
@@ -77,9 +78,45 @@ src/
 - WSL permissions require `--no-bin-links` flag for npm installs
 - iOS development from Windows requires Expo Go app for testing
 
-### Next Steps for Implementation
-1. Integrate Google Vision API for OCR
-2. Add Google Translate API for menu translation
-3. Connect Yelp/Google Places APIs for dish photos and reviews
-4. Implement proper error handling and loading states
-5. Add offline support and caching
+## Recent Progress Session (Latest)
+
+### What We Accomplished
+1. **Adaptive Column Detection**: Implemented image splitting approach that detects 1-4 columns automatically and processes left-to-right, top-to-bottom
+2. **Advanced Text Classification**: Built intelligent parsing to distinguish between:
+   - Categories (PIZZA, SANDWICH, SALAD, etc.)
+   - Dish names (PIZZA OLIVA, CHICKEN SANDWICH, etc.) 
+   - Descriptions/ingredients (MOZZARELLA, BELL PEPPER, etc.)
+   - Prices ($24.99, $15.99, etc.)
+3. **Translation Integration**: Connected Google Translate API with proper authentication
+4. **Price Normalization**: Fixed double $ signs and inconsistent price formatting
+5. **Description Combining**: Multi-line ingredient descriptions are properly combined
+
+### Current Issues Still Being Fixed
+1. **CHEESE classification**: Still showing as "other" instead of "dish" despite being followed by price
+2. **Category assignment**: OLIVICH should be under SANDWICH category but may be misplaced
+3. **Translation API auth**: Some network errors, may need credential verification
+4. **Description boundaries**: Occasionally picks up addresses/contact info in dish descriptions
+
+### Technical Implementation
+- **OCR Service**: Uses expo-image-manipulator to split images by detected columns
+- **Menu Service**: Orchestrates OCR → text processing → translation pipeline  
+- **Translation Service**: Complex text classification with context-aware detection
+- **Price Extraction**: Handles various price formats ($XX.XX, XX.XX$, plain numbers)
+
+### Next Priority Tasks
+1. **Fix remaining classification issues**: CHEESE detection, category assignment
+2. **Add category translations**: Show "PIZZA / 披萨" format
+3. **Handle customer options**: (BEEF/CHICKEN) choices, OR selections
+4. **Improve validation**: Better menu vs non-menu detection
+5. **Add real food photos**: Connect to food API for actual dish images
+
+### Code Organization Notes
+- All menu processing logic in `src/services/translationService.js`
+- Column detection and OCR in `src/services/ocrService.js`  
+- Main orchestration in `src/services/menuService.js`
+- UI display in `src/screens/MenuResultScreen.js`
+
+### For Next Session
+- Review recent commits for context of text classification improvements
+- Focus on the CHEESE detection fallback logic and category assignment
+- Consider adding debugging logs to understand classification flow better
