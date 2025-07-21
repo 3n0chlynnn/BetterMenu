@@ -208,10 +208,16 @@ const isCategoryHeader = (line, nextLine) => {
   // 2. Exact match with common category words (case insensitive)
   const exactCategoryMatches = [
     'pizza', 'sandwich', 'appetizers', 'entrees', 'desserts', 'beverages', 'drinks',
-    'salads', 'soups', 'sides', 'specials', 'wraps', 'pizzawich', 'pizzetta', 'healthy wraps'
+    'salads', 'soups', 'sides', 'specials', 'wraps', 'pizzawich', 'pizzetta', 'healthy wraps',
+    'side'
   ];
   if (exactCategoryMatches.includes(lowerLine)) {
     return true;
+  }
+  
+  // Don't classify specific dish names with (Halal) as categories
+  if (/\(halal\)/i.test(line) && line.length > 15) {
+    return false;
   }
   
   // 3. Contains category words, is short, and has proper formatting
@@ -292,13 +298,15 @@ const isDishName = (line) => {
   
   // Strong indicators this is an ingredient list, not a dish name
   const commaCount = (line.match(/,/g) || []).length;
-  const isLongIngredientList = commaCount >= 3; // 3+ commas usually indicates ingredients
+  const isLongIngredientList = commaCount >= 2; // 2+ commas usually indicates ingredients
   
   // Check for ingredient list patterns
   const ingredientPatterns = [
     /\b(served with|topped with|includes|contains)\b/i,
     /\b(lettuce|tomato|onion|pickle|cheese|sauce|dressing)\b.*,.*\b(lettuce|tomato|onion|pickle|cheese|sauce|dressing)\b/i,
-    /\b(mushroom|bell pepper|olive|cilantro|spinach)\b.*,.*\b(mushroom|bell pepper|olive|cilantro|spinach)\b/i
+    /\b(mushroom|bell pepper|olive|cilantro|spinach)\b.*,.*\b(mushroom|bell pepper|olive|cilantro|spinach)\b/i,
+    /\bmozzarella\b.*,/i,  // Lines starting with mozzarella + comma are usually ingredients
+    /^(mozzarella|cheese|lettuce|tomato|onion|bell pepper|mushroom|olive|oregano)/i, // Lines starting with common ingredients
   ];
   
   const hasIngredientPattern = ingredientPatterns.some(pattern => pattern.test(line));
@@ -442,7 +450,7 @@ const buildMenuItems = async (parsedItems) => {
       let descriptionLines = [];
       
       // Check next few lines for description and price
-      for (let j = i + 1; j < Math.min(i + 5, parsedItems.length); j++) {
+      for (let j = i + 1; j < Math.min(i + 8, parsedItems.length); j++) {
         const nextItem = parsedItems[j];
         
         if (nextItem.type === 'description') {
@@ -452,15 +460,21 @@ const buildMenuItems = async (parsedItems) => {
           }
         } else if (nextItem.type === 'price' && !price) {
           price = nextItem.text;
+          break; // Found price, stop looking
         } else if (nextItem.type === 'other') {
           // Check if this "other" item contains a price we missed
           const foundPrice = extractPrice(nextItem.text);
           if (foundPrice && !price) {
             price = foundPrice;
+            break; // Found price, stop looking
           }
           
+          // If it's a short ingredient word, likely part of description
+          if (nextItem.text.length <= 15 && /^(oregano|cheese|chips|mushroom|olive|cilantro)$/i.test(nextItem.text.trim())) {
+            descriptionLines.push(nextItem.text);
+          }
           // If it's a long line with commas, likely description
-          if (nextItem.text.length > 10 && /[,]/.test(nextItem.text)) {
+          else if (nextItem.text.length > 10 && /[,]/.test(nextItem.text)) {
             descriptionLines.push(nextItem.text);
           }
         } else if (nextItem.type === 'dish' || nextItem.type === 'category') {
@@ -468,8 +482,8 @@ const buildMenuItems = async (parsedItems) => {
         }
       }
       
-      // Combine all description lines
-      description = descriptionLines.join(' ').replace(/\s+/g, ' ').trim();
+      // Combine all description lines with proper spacing
+      description = descriptionLines.join(', ').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim();
       
       // Clean dish name (remove price if it's there and normalize spacing)
       let dishName = item.text.replace(/\$\d+\.?\d*|\d+\.?\d*\$?|\b\d{1,3}\.?\d{0,2}\b/g, '').trim();

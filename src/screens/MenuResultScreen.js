@@ -400,7 +400,7 @@ $2.95`;
                   </View>
                   <View style={styles.rightContainer}>
                     {item.price && (
-                      <Text style={styles.price}>${item.price}</Text>
+                      <Text style={styles.price}>{item.price}</Text>
                     )}
                     <Image source={{ uri: item.image }} style={styles.dishImage} />
                   </View>
