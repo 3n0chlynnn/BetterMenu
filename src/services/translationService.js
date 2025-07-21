@@ -116,7 +116,7 @@ const parseMenuStructure = (lines) => {
       continue;
     }
     
-    const itemType = identifyLineType(line, nextLine);
+    const itemType = identifyLineType(line, nextLine, i, lines);
     const price = extractPrice(line);
     
     console.log(`📝 Line: "${line}" → Type: ${itemType}, Price: ${price || 'none'}`);
@@ -133,7 +133,7 @@ const parseMenuStructure = (lines) => {
 };
 
 // Identify what type of content each line contains
-const identifyLineType = (line, nextLine) => {
+const identifyLineType = (line, nextLine, lineIndex, allLines) => {
   const lowerLine = line.toLowerCase();
   
   // Check if it's a category header
@@ -152,7 +152,7 @@ const identifyLineType = (line, nextLine) => {
   }
   
   // Check if it's a dish name (short, no detailed description)
-  if (isDishName(line)) {
+  if (isDishName(line, nextLine)) {
     return 'dish';
   }
   
@@ -222,10 +222,16 @@ const isCategoryHeader = (line, nextLine) => {
   
   // 2. Check if line is followed by what looks like a dish AND this line is very category-like
   if (nextLine) {
-    const nextLineIsDish = isDishName(nextLine);
+    const nextLineIsPrice = extractPrice(nextLine) !== null;
     const hasReasonableWordCount = wordCount <= 2; // More restrictive for context-based detection
     
+    // DON'T consider as category if followed by a price (means this line is likely a dish)
+    if (nextLineIsPrice) {
+      return false;
+    }
+    
     // Only consider as category if it's followed by a dish AND is simple
+    const nextLineIsDish = isDishName(nextLine, null); // Pass null for next line since we're checking nextLine
     if (nextLineIsDish && isShort && hasReasonableWordCount && isAllUppercase) {
       return true;
     }
@@ -257,7 +263,7 @@ const isPriceOnly = (line) => {
 };
 
 // Check if line is likely a dish name
-const isDishName = (line) => {
+const isDishName = (line, nextLine) => {
   // Remove price if present for analysis
   const lineWithoutPrice = line.replace(/\$\d+\.?\d*|\d+\.?\d*\$?|\b\d{1,3}\.?\d{0,2}\b/g, '').trim();
   const wordsWithoutPrice = lineWithoutPrice.split(/\s+/).filter(w => w.length > 0);
@@ -265,13 +271,17 @@ const isDishName = (line) => {
   // Skip if no words after removing price
   if (wordsWithoutPrice.length === 0) return false;
   
-  // Skip single ingredient words
+  // If followed by a price, even single words can be dishes (like VEGGIE, CHEESE)
+  const followedByPrice = nextLine && extractPrice(nextLine) !== null;
+  
+  // Skip single ingredient words UNLESS followed by price
   const singleIngredients = [
-    'oregano', 'mozzarella', 'pepperoni', 'cheese', 'lettuce', 'tomato', 'mushroom',
+    'oregano', 'mozzarella', 'pepperoni', 'lettuce', 'tomato', 'mushroom',
     'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles', 'chips'
   ];
   if (wordsWithoutPrice.length === 1 && 
-      singleIngredients.includes(lineWithoutPrice.toLowerCase())) {
+      singleIngredients.includes(lineWithoutPrice.toLowerCase()) &&
+      !followedByPrice) {
     return false;
   }
   
