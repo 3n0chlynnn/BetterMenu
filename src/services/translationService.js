@@ -12,9 +12,10 @@ export const translateText = async (text, targetLanguage = 'zh') => {
     const token = await getAccessToken();
     
     const requestBody = {
-      contents: [text],
-      targetLanguageCode: targetLanguage,
-      sourceLanguageCode: 'en'
+      q: text,
+      target: targetLanguage,
+      source: 'en',
+      format: 'text'
     };
 
     const response = await fetch(API_URLS.TRANSLATE, {
@@ -43,7 +44,7 @@ export const translateText = async (text, targetLanguage = 'zh') => {
       throw new Error(`Translate API Error: ${result.error.message}`);
     }
 
-    const translatedText = result.translations?.[0]?.translatedText || text;
+    const translatedText = result.data?.translations?.[0]?.translatedText || text;
     return translatedText;
   } catch (error) {
     console.error('Translation Error:', error);

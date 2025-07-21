@@ -39,12 +39,12 @@ X0DvqNHv3o9DFuFgMnyNOQ==
   // Token endpoint for service account authentication
   TOKEN_URI: 'https://oauth2.googleapis.com/token',
   
-  // Enable/disable API usage (set to false to use mock data only)
-  USE_REAL_APIS: false, // Temporarily disabled due to auth issues
+  // Enable/disable API usage (set to false to use mock data only)  
+  USE_REAL_APIS: true, // Enabled for real OCR and translation
 };
 
 // API URLs (no API key needed with service account)
 export const API_URLS = {
   VISION: 'https://vision.googleapis.com/v1/images:annotate',
-  TRANSLATE: `https://translation.googleapis.com/v1/projects/${API_CONFIG.PROJECT_ID}:translateText`,
+  TRANSLATE: 'https://translation.googleapis.com/language/translate/v2',
 };
