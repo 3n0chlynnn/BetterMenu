@@ -464,6 +464,7 @@ export const sortTextSpatially = (textAnnotations) => {
   
   for (const lineGroup of lineGroups) {
     const lineStartX = Math.min(...lineGroup.map(elem => elem.x));
+    const lineText = lineGroup.map(elem => elem.text).join(' ');
     
     // Find which column this line belongs to
     let columnIndex = 0;
@@ -475,6 +476,7 @@ export const sortTextSpatially = (textAnnotations) => {
       }
     }
     
+    console.log(`📍 Line "${lineText}" at X=${lineStartX} → Column ${columnIndex + 1}`);
     columns[columnIndex].push(lineGroup);
   }
   

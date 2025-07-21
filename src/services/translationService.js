@@ -119,7 +119,7 @@ const parseMenuStructure = (lines) => {
     const itemType = identifyLineType(line, nextLine);
     const price = extractPrice(line);
     
-    console.log(`📝 Line: "${line}" → Type: ${itemType}, Price: ${price}`);
+    console.log(`📝 Line: "${line}" → Type: ${itemType}, Price: ${price || 'none'}`);
     
     parsedItems.push({
       text: line,
@@ -409,11 +409,17 @@ const buildMenuItems = async (parsedItems) => {
           }
         } else if (nextItem.type === 'price' && !price) {
           price = nextItem.text;
-        } else if (nextItem.type === 'other' && 
-                   nextItem.text.length > 10 && 
-                   /[,]/.test(nextItem.text)) {
-          // Likely continuation of description (ingredient list)
-          descriptionLines.push(nextItem.text);
+        } else if (nextItem.type === 'other') {
+          // Check if this "other" item contains a price we missed
+          const foundPrice = extractPrice(nextItem.text);
+          if (foundPrice && !price) {
+            price = foundPrice;
+          }
+          
+          // If it's a long line with commas, likely description
+          if (nextItem.text.length > 10 && /[,]/.test(nextItem.text)) {
+            descriptionLines.push(nextItem.text);
+          }
         } else if (nextItem.type === 'dish' || nextItem.type === 'category') {
           break; // Stop if we hit another dish or category
         }
