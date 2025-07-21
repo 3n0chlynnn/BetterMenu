@@ -1,5 +1,6 @@
 import { API_CONFIG, API_URLS } from './config';
 import forge from 'node-forge';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 // OAuth token cache
 let accessToken = null;
@@ -16,69 +17,53 @@ export const extractTextFromImage = async (imageUri) => {
   }
 
   try {
+    console.log('🖼️ Starting image splitting approach...');
+    
     // Get access token
     const token = await getAccessToken();
     
-    // Convert image to base64
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    const base64 = await convertBlobToBase64(blob);
+    // First, get image dimensions to split it properly
+    const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { format: 'jpeg' });
+    const { width, height } = imageInfo;
+    console.log(`📐 Image dimensions: ${width}x${height}`);
     
-    // Remove data:image/jpeg;base64, prefix if present
-    const base64Data = base64.split(',')[1] || base64;
+    // Crop left half (0 to width/2)
+    console.log('✂️ Cropping left half...');
+    const leftHalf = await ImageManipulator.manipulateAsync(
+      imageUri, 
+      [{ crop: { originX: 0, originY: 0, width: width / 2, height: height } }],
+      { format: 'jpeg', compress: 0.8 }
+    );
     
-    const requestBody = {
-      requests: [
-        {
-          image: {
-            content: base64Data,
-          },
-          features: [
-            {
-              type: 'TEXT_DETECTION',
-              maxResults: 1,
-            },
-            {
-              type: 'OBJECT_LOCALIZATION',
-              maxResults: 10,
-            },
-          ],
-        },
-      ],
-    };
-
-    const apiResponse = await fetch(API_URLS.VISION, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const result = await apiResponse.json();
+    // Crop right half (width/2 to width)  
+    console.log('✂️ Cropping right half...');
+    const rightHalf = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [{ crop: { originX: width / 2, originY: 0, width: width / 2, height: height } }],
+      { format: 'jpeg', compress: 0.8 }
+    );
     
-    if (result.error) {
-      throw new Error(`Vision API Error: ${result.error.message}`);
-    }
-
-    // Get both linear text and spatial text elements
-    const detectedText = result.responses[0]?.textAnnotations?.[0]?.description || '';
-    const textAnnotations = result.responses[0]?.textAnnotations || [];
-    const objects = result.responses[0]?.localizedObjectAnnotations || [];
+    // Do OCR on left half first
+    console.log('🔍 OCR on left half...');
+    const leftText = await performOCR(leftHalf.uri, token);
     
-    // Validate if this looks like a menu
-    const menuValidation = validateMenuPhoto(detectedText, objects);
-    if (!menuValidation.isLikelyMenu) {
-      throw new Error(`This doesn't appear to be a menu. ${menuValidation.reason}`);
-    }
+    // Do OCR on right half second
+    console.log('🔍 OCR on right half...');
+    const rightText = await performOCR(rightHalf.uri, token);
     
-    // Return both linear text and spatial data
+    // Combine results (left first, then right)
+    const combinedText = leftText + '\n\n' + rightText;
+    console.log(`📄 Combined text length: ${combinedText.length}`);
+    console.log('📋 Left text preview:', leftText.substring(0, 100) + '...');
+    console.log('📋 Right text preview:', rightText.substring(0, 100) + '...');
+    
+    // Return combined result
     return {
-      text: detectedText,
-      spatialElements: textAnnotations.slice(1), // Skip the first element (full text)
-      hasColumnLayout: detectColumnLayout(textAnnotations.slice(1))
+      text: combinedText,
+      spatialElements: [],
+      hasColumnLayout: true // We know it has columns since we split it
     };
+    
   } catch (error) {
     console.error('OCR Error:', error);
     // If it's a validation error, re-throw it to show to user
@@ -92,6 +77,52 @@ export const extractTextFromImage = async (imageUri) => {
       hasColumnLayout: false
     };
   }
+};
+
+// Helper function to perform OCR on a single image
+const performOCR = async (imageUri, token) => {
+  // Convert image to base64
+  const response = await fetch(imageUri);
+  const blob = await response.blob();
+  const base64 = await convertBlobToBase64(blob);
+  
+  // Remove data:image/jpeg;base64, prefix if present
+  const base64Data = base64.split(',')[1] || base64;
+  
+  const requestBody = {
+    requests: [
+      {
+        image: {
+          content: base64Data,
+        },
+        features: [
+          {
+            type: 'TEXT_DETECTION',
+            maxResults: 1,
+          },
+        ],
+      },
+    ],
+  };
+
+  const apiResponse = await fetch(API_URLS.VISION, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const result = await apiResponse.json();
+  
+  if (result.error) {
+    throw new Error(`Vision API Error: ${result.error.message}`);
+  }
+
+  // Get the detected text
+  const detectedText = result.responses[0]?.textAnnotations?.[0]?.description || '';
+  return detectedText;
 };
 
 // Generate JWT and get OAuth access token

@@ -21,14 +21,9 @@ export const processMenuPhoto = async (imageUri) => {
     console.log('🏗️ Layout type:', hasColumnLayout ? 'COLUMNAR' : 'LINEAR');
     console.log('📍 Spatial elements:', spatialElements.length);
     
-    // Step 2: Use spatial sorting if we have column layout and spatial data
+    // Step 2: Text is already in correct order from image splitting
     let processedText = extractedText;
-    if (hasColumnLayout && spatialElements.length > 0) {
-      console.log('🔧 Applying spatial sorting for column layout...');
-      const sortedTextArray = sortTextSpatially(spatialElements);
-      processedText = sortedTextArray.join('\n');
-      console.log('✅ Spatially sorted text length:', processedText.length);
-    }
+    console.log('✅ Using image splitting approach - text already in correct order');
     
     // Step 3: Process and translate the extracted text
     console.log('Processing and translating menu items...');
@@ -52,8 +47,8 @@ export const processMenuPhoto = async (imageUri) => {
       extractedText: processedText,
       menuItems: groupedItems,
       totalItems: menuItems.length,
-      layoutType: hasColumnLayout ? 'columnar' : 'linear',
-      spatialElements: spatialElements.length
+      layoutType: hasColumnLayout ? 'image-split-columnar' : 'linear',
+      spatialElements: 0 // No spatial elements needed with image splitting
     };
     
   } catch (error) {
