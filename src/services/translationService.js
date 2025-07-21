@@ -198,7 +198,13 @@ const isCategoryHeader = (line, nextLine) => {
   
   // Skip obvious ingredient lists
   const commaCount = (line.match(/,/g) || []).length;
-  if (commaCount >= 2) {
+  if (commaCount >= 1) { // Even 1 comma usually indicates ingredients
+    return false;
+  }
+  
+  // Skip lines that start with common ingredients (even without commas)
+  const startsWithIngredient = /^(mozzarella|cheese|lettuce|tomato|onion|bell pepper|mushroom|olive|oregano|chips|cilantro|pepperoni|spinach|avocado)/i.test(line.trim());
+  if (startsWithIngredient) {
     return false;
   }
   
@@ -331,7 +337,7 @@ const isDescription = (line) => {
   // Descriptions are usually:
   // - Ingredient lists with commas
   // - Cooking methods
-  // - Mostly lowercase (except first letter)
+  // - Single ingredient words that are part of lists
   
   const lowerLine = line.toLowerCase();
   const wordCount = line.trim().split(/\s+/).length;
@@ -343,15 +349,25 @@ const isDescription = (line) => {
     'seasoned', 'marinated', 'sauce', 'dressing', 'cheese', 'lettuce',
     'tomato', 'onion', 'pepper', 'mushroom', 'olive', 'herbs', 'spices',
     'organic', 'local', 'homemade', 'mozzarella', 'beef', 'chicken',
-    'spinach', 'avocado', 'pickle', 'cilantro'
+    'spinach', 'avocado', 'pickle', 'cilantro', 'oregano', 'pepperoni'
   ];
+  
+  // Check if it starts with ingredient words
+  const startsWithIngredient = /^(mozzarella|cheese|lettuce|tomato|onion|bell pepper|mushroom|olive|oregano|chips|cilantro|pepperoni|spinach|avocado)/i.test(line.trim());
   
   const hasDescriptiveWords = descriptiveWords.some(word => lowerLine.includes(word));
   const hasMultipleCommas = commaCount >= 2;
+  const hasSingleComma = commaCount >= 1;
   const isLongEnough = wordCount >= 3;
   
-  // If it has many commas and descriptive words, it's likely a description
-  return (hasMultipleCommas && isLongEnough) || (hasDescriptiveWords && wordCount >= 4);
+  // Single ingredient words are likely descriptions when they're common ingredients
+  const isSingleIngredient = wordCount === 1 && descriptiveWords.includes(lowerLine.trim());
+  
+  // If it has commas OR starts with ingredients OR is a single ingredient, likely description
+  return (hasMultipleCommas && isLongEnough) || 
+         (hasSingleComma && startsWithIngredient) ||
+         (hasDescriptiveWords && wordCount >= 3) ||
+         isSingleIngredient;
 };
 
 // Extract price from a line with better patterns
@@ -446,13 +462,12 @@ const buildMenuItems = async (parsedItems) => {
           }
         } else if (nextItem.type === 'price' && !price) {
           price = nextItem.text;
-          break; // Found price, stop looking
+          // Don't break - continue looking for descriptions after price
         } else if (nextItem.type === 'other') {
           // Check if this "other" item contains a price we missed
           const foundPrice = extractPrice(nextItem.text);
           if (foundPrice && !price) {
             price = foundPrice;
-            break; // Found price, stop looking
           }
           
           // If it's a short ingredient word, likely part of description
