@@ -120,3 +120,8 @@ src/
 - Review recent commits for context of text classification improvements
 - Focus on the CHEESE detection fallback logic and category assignment
 - Consider adding debugging logs to understand classification flow better
+
+## Development Workflow Guidance
+
+### Commit Practices
+- Always commit changes after each update and fix, add details about what you did
