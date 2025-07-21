@@ -481,55 +481,47 @@ export const sortTextSpatially = (textAnnotations) => {
   // Reconstruct logical lines from word groups (process left column completely, then right)
   const reconstructedLines = [];
   
-  // Better approach: Process elements row by row based on Y coordinates
-  // Collect all line groups with their Y positions
-  const allLineGroups = [];
+  // Process each column completely (top to bottom) before moving to next column
+  // This ensures proper reading: left column top-to-bottom, then right column top-to-bottom
   columns.forEach((column, columnIndex) => {
-    column.forEach(lineGroup => {
-      const avgY = lineGroup.reduce((sum, elem) => sum + elem.y, 0) / lineGroup.length;
-      allLineGroups.push({
-        lineGroup,
-        avgY,
-        columnIndex,
-        minX: Math.min(...lineGroup.map(elem => elem.x))
-      });
-    });
-  });
-  
-  // Sort all line groups by Y coordinate first (top to bottom), then by X coordinate (left to right)
-  allLineGroups.sort((a, b) => {
-    const yDiff = a.avgY - b.avgY;
-    // If they're on the same horizontal line (within 15px Y tolerance), sort by X
-    if (Math.abs(yDiff) <= 15) {
-      return a.minX - b.minX;
-    }
-    return yDiff;
-  });
-  
-  // Now process in the sorted order for proper left-to-right, top-to-bottom reading
-  allLineGroups.forEach(({ lineGroup, columnIndex }) => {
-    // Combine words in this line, maintaining spacing
-    let lineText = '';
-    let lastX = -1;
-    
-    lineGroup.forEach(elem => {
-      // Add appropriate spacing between words
-      if (lastX >= 0) {
-        const gap = elem.x - lastX;
-        if (gap > 40) { // Large gap - probably separate sections
-          lineText += '   '; // Multiple spaces
-        } else if (gap > 15) { // Normal word spacing
-          lineText += ' ';
-        }
-        // Small gaps - words are close, don't add extra space
-      }
+    if (column.length > 0) {
+      console.log(`📊 Processing Column ${columnIndex + 1}: ${column.length} lines`);
       
-      lineText += elem.text;
-      lastX = elem.right;
-    });
-    
-    if (lineText.trim().length > 0) {
-      reconstructedLines.push(lineText.trim());
+      // Sort lines within this column by Y coordinate (top to bottom)
+      const sortedColumn = column.slice().sort((a, b) => {
+        const avgYA = a.reduce((sum, elem) => sum + elem.y, 0) / a.length;
+        const avgYB = b.reduce((sum, elem) => sum + elem.y, 0) / b.length;
+        return avgYA - avgYB;
+      });
+      
+      // Process each line in this column
+      sortedColumn.forEach(lineGroup => {
+        // Combine words in this line, maintaining spacing
+        let lineText = '';
+        let lastX = -1;
+        
+        lineGroup.forEach(elem => {
+          // Add appropriate spacing between words
+          if (lastX >= 0) {
+            const gap = elem.x - lastX;
+            if (gap > 40) { // Large gap - probably separate sections
+              lineText += '   '; // Multiple spaces
+            } else if (gap > 15) { // Normal word spacing
+              lineText += ' ';
+            }
+            // Small gaps - words are close, don't add extra space
+          }
+          
+          lineText += elem.text;
+          lastX = elem.right;
+        });
+        
+        if (lineText.trim().length > 0) {
+          reconstructedLines.push(lineText.trim());
+        }
+      });
+      
+      console.log(`✅ Completed Column ${columnIndex + 1}`);
     }
   });
   

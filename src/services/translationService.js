@@ -26,7 +26,18 @@ export const translateText = async (text, targetLanguage = 'zh') => {
       body: JSON.stringify(requestBody),
     });
 
-    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Translation API response is not JSON:', responseText.substring(0, 200));
+      throw new Error('Translation API returned non-JSON response');
+    }
     
     if (result.error) {
       throw new Error(`Translate API Error: ${result.error.message}`);
