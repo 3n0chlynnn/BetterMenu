@@ -343,6 +343,12 @@ const isDishName = (line, nextLine) => {
   const startsWithCapital = /^[A-Z]/.test(line);
   
   // More inclusive logic for dish detection
+  // If followed by price, be very inclusive (even single words can be dishes)
+  if (followedByPrice) {
+    return hasCapitalization && reasonableLength && startsWithCapital;
+  }
+  
+  // Otherwise use normal dish detection logic
   const isLikelyDish = hasCapitalization && reasonableLength && reasonableWordCount && 
                        (hasDishKeywords || startsWithCapital);
   
@@ -471,8 +477,19 @@ const buildMenuItems = async (parsedItems) => {
       let descriptionLines = [];
       
       // Check next few lines for description and price
-      for (let j = i + 1; j < Math.min(i + 8, parsedItems.length); j++) {
+      for (let j = i + 1; j < Math.min(i + 6, parsedItems.length); j++) {
         const nextItem = parsedItems[j];
+        
+        // Stop if we hit another dish or category
+        if (nextItem.type === 'dish' || nextItem.type === 'category') {
+          break;
+        }
+        
+        // Stop if we hit contact info (addresses, etc.)
+        if (nextItem.type === 'contact' || 
+            /\b(street|ave|avenue|road|dr|drive|suite|ca|zip|\d{5})\b/i.test(nextItem.text)) {
+          break;
+        }
         
         if (nextItem.type === 'description') {
           descriptionLines.push(nextItem.text);
@@ -481,7 +498,7 @@ const buildMenuItems = async (parsedItems) => {
           }
         } else if (nextItem.type === 'price' && !price) {
           price = nextItem.text;
-          // Don't break - continue looking for descriptions after price
+          // Continue looking for descriptions immediately after price
         } else if (nextItem.type === 'other') {
           // Check if this "other" item contains a price we missed
           const foundPrice = extractPrice(nextItem.text);
@@ -490,15 +507,13 @@ const buildMenuItems = async (parsedItems) => {
           }
           
           // If it's a short ingredient word, likely part of description
-          if (nextItem.text.length <= 15 && /^(oregano|cheese|chips|mushroom|olive|cilantro)$/i.test(nextItem.text.trim())) {
+          if (nextItem.text.length <= 15 && /^(oregano|chips|mushroom|olive|cilantro)$/i.test(nextItem.text.trim())) {
             descriptionLines.push(nextItem.text);
           }
           // If it's a long line with commas, likely description
           else if (nextItem.text.length > 10 && /[,]/.test(nextItem.text)) {
             descriptionLines.push(nextItem.text);
           }
-        } else if (nextItem.type === 'dish' || nextItem.type === 'category') {
-          break; // Stop if we hit another dish or category
         }
       }
       
