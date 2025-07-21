@@ -216,6 +216,12 @@ const isCategoryHeader = (line, nextLine) => {
   const wordCount = line.trim().split(/\s+/).length;
   const isSimplePhrase = wordCount <= 2; // Most categories are 1-2 words
   
+  // Check if next line is a price - if so, this is likely a dish, not category
+  const nextLineIsPrice = nextLine && extractPrice(nextLine) !== null;
+  if (nextLineIsPrice) {
+    return false;
+  }
+  
   if (isAllUppercase && isShort && isSimplePhrase) {
     return true;
   }
@@ -278,6 +284,7 @@ const isDishName = (line, nextLine) => {
   const singleIngredients = [
     'oregano', 'mozzarella', 'pepperoni', 'lettuce', 'tomato', 'mushroom',
     'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles', 'chips'
+    // Note: removed 'cheese' because it can be a dish name when followed by price
   ];
   if (wordsWithoutPrice.length === 1 && 
       singleIngredients.includes(lineWithoutPrice.toLowerCase()) &&
