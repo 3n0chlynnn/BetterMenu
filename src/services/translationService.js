@@ -166,13 +166,6 @@ const identifyLineType = (line, nextLine) => {
 
 // Check if a line is a category header
 const isCategoryHeader = (line, nextLine) => {
-  const categoryWords = [
-    'pizza', 'sandwich', 'appetizer', 'starter', 'entree', 'main', 'dessert', 'beverage', 'drink',
-    'soup', 'salad', 'pasta', 'burger', 'coffee', 'tea', 'wine', 'beer', 'cocktail', 
-    'specials', 'today', 'fresh', 'healthy', 'wraps', 'wrap', 'side', 'sides', 'pizzawich',
-    'pizzetta', 'side', 'fries'
-  ];
-  
   const lowerLine = line.toLowerCase().trim();
   
   // Skip if it has a price (categories don't have prices)
@@ -198,6 +191,17 @@ const isCategoryHeader = (line, nextLine) => {
     return false;
   }
   
+  // Don't classify specific dish names with (Halal) as categories
+  if (/\(halal\)/i.test(line) && line.length > 15) {
+    return false;
+  }
+  
+  // Skip obvious ingredient lists
+  const commaCount = (line.match(/,/g) || []).length;
+  if (commaCount >= 2) {
+    return false;
+  }
+  
   // Strong indicators of category headers:
   
   // 1. All uppercase AND short (very common pattern)
@@ -205,36 +209,19 @@ const isCategoryHeader = (line, nextLine) => {
     return true;
   }
   
-  // 2. Exact match with common category words (case insensitive)
-  const exactCategoryMatches = [
-    'pizza', 'sandwich', 'appetizers', 'entrees', 'desserts', 'beverages', 'drinks',
-    'salads', 'soups', 'sides', 'specials', 'wraps', 'pizzawich', 'pizzetta', 'healthy wraps',
-    'side'
-  ];
-  if (exactCategoryMatches.includes(lowerLine)) {
-    return true;
-  }
-  
-  // Don't classify specific dish names with (Halal) as categories
-  if (/\(halal\)/i.test(line) && line.length > 15) {
-    return false;
-  }
-  
-  // 3. Contains category words, is short, and has proper formatting
-  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
-  const isShort = line.length <= 25; // Categories are usually short
-  const hasCommas = (line.match(/,/g) || []).length;
-  const isNotIngredientList = hasCommas === 0; // Categories don't have commas
-  const hasReasonableWordCount = line.trim().split(/\s+/).length <= 3; // Categories are 1-3 words
-  
-  if (hasCategory && isShort && isNotIngredientList && hasReasonableWordCount) {
-    return true;
-  }
-  
-  // 4. Check if line is followed by what looks like a dish (strong indicator)
-  if (nextLine && hasCategory && isShort) {
+  // 2. Check if line is followed by what looks like a dish (strong indicator)
+  if (nextLine) {
     const nextLineIsDish = isDishName(nextLine);
-    if (nextLineIsDish) {
+    const nextLineHasPrice = extractPrice(nextLine) !== null;
+    const isShort = line.length <= 25;
+    const hasReasonableWordCount = line.trim().split(/\s+/).length <= 3;
+    
+    if (nextLineIsDish && isShort && hasReasonableWordCount) {
+      return true;
+    }
+    
+    // If next line is a price, this might be a category followed by a price line
+    if (nextLineHasPrice && isShort && hasReasonableWordCount) {
       return true;
     }
   }
