@@ -204,24 +204,23 @@ const isCategoryHeader = (line, nextLine) => {
   
   // Strong indicators of category headers:
   
-  // 1. All uppercase AND short (very common pattern)
-  if (line === line.toUpperCase() && line.length > 2 && line.length <= 25) {
+  // 1. All uppercase AND short AND single word or simple phrase (very common pattern)
+  const isAllUppercase = line === line.toUpperCase();
+  const isShort = line.length > 2 && line.length <= 25;
+  const wordCount = line.trim().split(/\s+/).length;
+  const isSimplePhrase = wordCount <= 2; // Most categories are 1-2 words
+  
+  if (isAllUppercase && isShort && isSimplePhrase) {
     return true;
   }
   
-  // 2. Check if line is followed by what looks like a dish (strong indicator)
+  // 2. Check if line is followed by what looks like a dish AND this line is very category-like
   if (nextLine) {
     const nextLineIsDish = isDishName(nextLine);
-    const nextLineHasPrice = extractPrice(nextLine) !== null;
-    const isShort = line.length <= 25;
-    const hasReasonableWordCount = line.trim().split(/\s+/).length <= 3;
+    const hasReasonableWordCount = wordCount <= 2; // More restrictive for context-based detection
     
-    if (nextLineIsDish && isShort && hasReasonableWordCount) {
-      return true;
-    }
-    
-    // If next line is a price, this might be a category followed by a price line
-    if (nextLineHasPrice && isShort && hasReasonableWordCount) {
+    // Only consider as category if it's followed by a dish AND is simple
+    if (nextLineIsDish && isShort && hasReasonableWordCount && isAllUppercase) {
       return true;
     }
   }
@@ -320,9 +319,9 @@ const isDishName = (line) => {
   // Check if it starts with a capital letter (dish names usually do)
   const startsWithCapital = /^[A-Z]/.test(line);
   
-  // More strict logic - require either dish keywords or proper capitalization
+  // More inclusive logic for dish detection
   const isLikelyDish = hasCapitalization && reasonableLength && reasonableWordCount && 
-                       (hasDishKeywords || (startsWithCapital && wordsWithoutPrice.length <= 4));
+                       (hasDishKeywords || startsWithCapital);
   
   return isLikelyDish;
 };
