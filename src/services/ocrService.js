@@ -481,41 +481,55 @@ export const sortTextSpatially = (textAnnotations) => {
   // Reconstruct logical lines from word groups (process left column completely, then right)
   const reconstructedLines = [];
   
-  // Process columns in order (left to right), but complete each column fully
+  // Better approach: Process elements row by row based on Y coordinates
+  // Collect all line groups with their Y positions
+  const allLineGroups = [];
   columns.forEach((column, columnIndex) => {
-    if (column.length > 0) {
-      console.log(`📊 Column ${columnIndex + 1}: ${column.length} lines`);
-      
-      column.forEach(lineGroup => {
-        // Combine words in this line, maintaining spacing
-        let lineText = '';
-        let lastX = -1;
-        
-        lineGroup.forEach(elem => {
-          // Add appropriate spacing between words
-          if (lastX >= 0) {
-            const gap = elem.x - lastX;
-            if (gap > 40) { // Large gap - probably separate sections
-              lineText += '   '; // Multiple spaces
-            } else if (gap > 15) { // Normal word spacing
-              lineText += ' ';
-            }
-            // Small gaps - words are close, don't add extra space
-          }
-          
-          lineText += elem.text;
-          lastX = elem.right;
-        });
-        
-        if (lineText.trim().length > 0) {
-          reconstructedLines.push(lineText.trim());
-        }
+    column.forEach(lineGroup => {
+      const avgY = lineGroup.reduce((sum, elem) => sum + elem.y, 0) / lineGroup.length;
+      allLineGroups.push({
+        lineGroup,
+        avgY,
+        columnIndex,
+        minX: Math.min(...lineGroup.map(elem => elem.x))
       });
-      
-      // Add a column separator comment for debugging
-      if (columnIndex < columns.length - 1 && column.length > 0) {
-        console.log(`🔄 Finished column ${columnIndex + 1}, moving to column ${columnIndex + 2}`);
+    });
+  });
+  
+  // Sort all line groups by Y coordinate first (top to bottom), then by X coordinate (left to right)
+  allLineGroups.sort((a, b) => {
+    const yDiff = a.avgY - b.avgY;
+    // If they're on the same horizontal line (within 15px Y tolerance), sort by X
+    if (Math.abs(yDiff) <= 15) {
+      return a.minX - b.minX;
+    }
+    return yDiff;
+  });
+  
+  // Now process in the sorted order for proper left-to-right, top-to-bottom reading
+  allLineGroups.forEach(({ lineGroup, columnIndex }) => {
+    // Combine words in this line, maintaining spacing
+    let lineText = '';
+    let lastX = -1;
+    
+    lineGroup.forEach(elem => {
+      // Add appropriate spacing between words
+      if (lastX >= 0) {
+        const gap = elem.x - lastX;
+        if (gap > 40) { // Large gap - probably separate sections
+          lineText += '   '; // Multiple spaces
+        } else if (gap > 15) { // Normal word spacing
+          lineText += ' ';
+        }
+        // Small gaps - words are close, don't add extra space
       }
+      
+      lineText += elem.text;
+      lastX = elem.right;
+    });
+    
+    if (lineText.trim().length > 0) {
+      reconstructedLines.push(lineText.trim());
     }
   });
   

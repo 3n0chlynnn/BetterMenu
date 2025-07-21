@@ -12,10 +12,9 @@ export const translateText = async (text, targetLanguage = 'zh') => {
     const token = await getAccessToken();
     
     const requestBody = {
-      q: text,
-      target: targetLanguage,
-      source: 'en',
-      format: 'text'
+      contents: [text],
+      targetLanguageCode: targetLanguage,
+      sourceLanguageCode: 'en'
     };
 
     const response = await fetch(API_URLS.TRANSLATE, {
@@ -33,7 +32,7 @@ export const translateText = async (text, targetLanguage = 'zh') => {
       throw new Error(`Translate API Error: ${result.error.message}`);
     }
 
-    const translatedText = result.data?.translations?.[0]?.translatedText || text;
+    const translatedText = result.translations?.[0]?.translatedText || text;
     return translatedText;
   } catch (error) {
     console.error('Translation Error:', error);
@@ -320,10 +319,11 @@ const extractPrice = (line) => {
   for (const pattern of pricePatterns) {
     const match = line.match(pattern);
     if (match) {
-      const price = match[1] || match[0].replace(/[^\d.]/g, '');
+      let price = match[1] || match[0].replace(/[^\d.]/g, '');
       // Only return if it looks like a valid price (not a year or random number)
       const priceNum = parseFloat(price);
       if (priceNum >= 1 && priceNum <= 200) {
+        // Return clean numeric value without $ - will be added later
         return price;
       }
     }
@@ -414,11 +414,18 @@ const buildMenuItems = async (parsedItems) => {
       let dishName = item.text.replace(/\$\d+\.?\d*|\d+\.?\d*\$?|\b\d{1,3}\.?\d{0,2}\b/g, '').trim();
       dishName = dishName.replace(/\s+/g, ' '); // Normalize multiple spaces
       
-      // Clean price - remove duplicate dollar signs
+      // Clean and normalize price
       if (price) {
-        price = price.replace(/\$+/g, '$'); // Replace multiple $ with single $
-        if (!price.startsWith('$') && !/^\d/.test(price)) {
-          price = '$' + price;
+        // Remove any existing $ symbols first
+        let cleanPrice = price.replace(/\$/g, '');
+        // Extract just the numeric part
+        const numericMatch = cleanPrice.match(/(\d+\.?\d*)/);
+        if (numericMatch) {
+          cleanPrice = numericMatch[1];
+          // Add single $ prefix
+          price = '$' + cleanPrice;
+        } else {
+          price = null; // Invalid price
         }
       }
       

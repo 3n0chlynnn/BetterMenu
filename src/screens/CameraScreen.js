@@ -82,16 +82,6 @@ const CameraScreen = ({ navigation }) => {
           <Text style={styles.galleryText}>🖼️</Text>
         </TouchableOpacity>
         
-        {/* Debug button for testing */}
-        <TouchableOpacity 
-          style={styles.debugButton} 
-          onPress={() => {
-            console.log('🔧 Debug button pressed');
-            Alert.alert('Debug', 'Gallery button should work now!');
-          }}
-        >
-          <Text style={styles.debugText}>🔧</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -151,20 +141,6 @@ const styles = StyleSheet.create({
   },
   galleryText: {
     fontSize: 28,
-    textAlign: 'center',
-  },
-  debugButton: {
-    position: 'absolute',
-    left: 30,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  debugText: {
-    fontSize: 20,
     textAlign: 'center',
   },
   button: {

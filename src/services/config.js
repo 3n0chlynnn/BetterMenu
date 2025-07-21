@@ -46,5 +46,5 @@ X0DvqNHv3o9DFuFgMnyNOQ==
 // API URLs (no API key needed with service account)
 export const API_URLS = {
   VISION: 'https://vision.googleapis.com/v1/images:annotate',
-  TRANSLATE: 'https://translation.googleapis.com/language/translate/v2',
+  TRANSLATE: `https://translation.googleapis.com/v1/projects/${API_CONFIG.PROJECT_ID}:translateText`,
 };
