@@ -109,7 +109,7 @@ const parseMenuStructure = (lines) => {
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : null;
     
     // Skip very short lines or obvious non-menu content
     if (shouldSkipLine(line)) {
@@ -157,7 +157,7 @@ const identifyLineType = (line, nextLine, lineIndex, allLines) => {
   }
   
   // Check if it's a description
-  if (isDescription(line)) {
+  if (isDescription(line, nextLine)) {
     return 'description';
   }
   
@@ -343,7 +343,7 @@ const isDishName = (line, nextLine) => {
 };
 
 // Check if line is a description
-const isDescription = (line) => {
+const isDescription = (line, nextLine) => {
   // Descriptions are usually:
   // - Ingredient lists with commas
   // - Cooking methods
@@ -370,8 +370,10 @@ const isDescription = (line) => {
   const hasSingleComma = commaCount >= 1;
   const isLongEnough = wordCount >= 3;
   
-  // Single ingredient words are likely descriptions when they're common ingredients
-  const isSingleIngredient = wordCount === 1 && descriptiveWords.includes(lowerLine.trim());
+  // Single ingredient words are likely descriptions when they're common ingredients 
+  // BUT NOT if they're followed by a price (then they're dishes)
+  const followedByPrice = extractPrice(nextLine || '') !== null;
+  const isSingleIngredient = wordCount === 1 && descriptiveWords.includes(lowerLine.trim()) && !followedByPrice;
   
   // If it has commas OR starts with ingredients OR is a single ingredient, likely description
   return (hasMultipleCommas && isLongEnough) || 
