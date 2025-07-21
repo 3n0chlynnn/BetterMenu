@@ -161,6 +161,14 @@ const identifyLineType = (line, nextLine, lineIndex, allLines) => {
     return 'description';
   }
   
+  // Special case: if followed by price, likely a dish even if not caught by isDishName
+  if (nextLine && extractPrice(nextLine) !== null) {
+    // Skip obvious non-dishes
+    if (!isContactInfo(line) && !isPriceOnly(line) && line.length >= 3) {
+      return 'dish';
+    }
+  }
+  
   return 'other';
 };
 
@@ -468,6 +476,19 @@ const buildMenuItems = async (parsedItems) => {
     
     if (item.type === 'contact') {
       continue; // Skip contact information
+    }
+    
+    // Look for better category context for dishes
+    if (item.type === 'dish') {
+      // Look backwards for a recent category
+      let betterCategory = currentCategory;
+      for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+        if (parsedItems[j].type === 'category') {
+          betterCategory = parsedItems[j].text;
+          break;
+        }
+      }
+      currentCategory = betterCategory;
     }
     
     if (item.type === 'dish') {
