@@ -169,7 +169,8 @@ const isCategoryHeader = (line, nextLine) => {
   const categoryWords = [
     'pizza', 'sandwich', 'appetizer', 'starter', 'entree', 'main', 'dessert', 'beverage', 'drink',
     'soup', 'salad', 'pasta', 'burger', 'coffee', 'tea', 'wine', 'beer', 'cocktail', 
-    'specials', 'today', 'fresh', 'healthy', 'wraps', 'side', 'sides'
+    'specials', 'today', 'fresh', 'healthy', 'wraps', 'wrap', 'side', 'sides', 'pizzawich',
+    'pizzetta', 'side', 'fries'
   ];
   
   const lowerLine = line.toLowerCase().trim();
@@ -186,25 +187,50 @@ const isCategoryHeader = (line, nextLine) => {
   // Skip single ingredient words
   const singleIngredients = [
     'oregano', 'mozzarella', 'pepperoni', 'cheese', 'lettuce', 'tomato', 'mushroom',
-    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles'
+    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles', 'chips'
   ];
   if (singleIngredients.includes(lowerLine)) {
     return false;
   }
   
-  // Check if it's all uppercase (common for headers) AND short
-  if (line === line.toUpperCase() && line.length > 3 && line.length < 20) {
+  // Skip parenthetical notes
+  if (/^\([^)]*\)$/.test(line.trim())) {
+    return false;
+  }
+  
+  // Strong indicators of category headers:
+  
+  // 1. All uppercase AND short (very common pattern)
+  if (line === line.toUpperCase() && line.length > 2 && line.length <= 25) {
     return true;
   }
   
-  // Check if it contains category words and is reasonably short
-  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
-  const isShort = line.length < 30; // Categories are usually short
-  const hasCommas = (line.match(/,/g) || []).length;
-  const isNotIngredientList = hasCommas < 2; // Categories don't have many commas
-  
-  if (hasCategory && isShort && isNotIngredientList) {
+  // 2. Exact match with common category words (case insensitive)
+  const exactCategoryMatches = [
+    'pizza', 'sandwich', 'appetizers', 'entrees', 'desserts', 'beverages', 'drinks',
+    'salads', 'soups', 'sides', 'specials', 'wraps', 'pizzawich', 'pizzetta', 'healthy wraps'
+  ];
+  if (exactCategoryMatches.includes(lowerLine)) {
     return true;
+  }
+  
+  // 3. Contains category words, is short, and has proper formatting
+  const hasCategory = categoryWords.some(word => lowerLine.includes(word));
+  const isShort = line.length <= 25; // Categories are usually short
+  const hasCommas = (line.match(/,/g) || []).length;
+  const isNotIngredientList = hasCommas === 0; // Categories don't have commas
+  const hasReasonableWordCount = line.trim().split(/\s+/).length <= 3; // Categories are 1-3 words
+  
+  if (hasCategory && isShort && isNotIngredientList && hasReasonableWordCount) {
+    return true;
+  }
+  
+  // 4. Check if line is followed by what looks like a dish (strong indicator)
+  if (nextLine && hasCategory && isShort) {
+    const nextLineIsDish = isDishName(nextLine);
+    if (nextLineIsDish) {
+      return true;
+    }
   }
   
   return false;
@@ -244,7 +270,7 @@ const isDishName = (line) => {
   // Skip single ingredient words
   const singleIngredients = [
     'oregano', 'mozzarella', 'pepperoni', 'cheese', 'lettuce', 'tomato', 'mushroom',
-    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles'
+    'olive', 'onion', 'pepper', 'spinach', 'avocado', 'cilantro', 'pickles', 'chips'
   ];
   if (wordsWithoutPrice.length === 1 && 
       singleIngredients.includes(lineWithoutPrice.toLowerCase())) {
@@ -257,34 +283,51 @@ const isDishName = (line) => {
     /^\$\d+\.?\d*$/,  // Just a price
     /^\(\d+\)/, // Phone numbers
     /^on\s+(baguette|flat\s+bread|whole\s+wheat)/i, // Descriptions starting with "on"
+    /^\([^)]*\)$/,    // Pure parenthetical notes like "(Halal)" or "(Beef/Chicken)"
   ];
   
   if (skipPatterns.some(pattern => pattern.test(line))) {
     return false;
   }
   
-  // Dish characteristics - be more permissive
-  const hasCapitalization = /[A-Z]/.test(line);
-  const notTooLong = line.length <= 100; // Increased from 80
-  const notTooShort = wordsWithoutPrice.length >= 1;
-  
-  // Skip obvious ingredient lists (too many commas)
+  // Strong indicators this is an ingredient list, not a dish name
   const commaCount = (line.match(/,/g) || []).length;
-  const isIngredientList = commaCount >= 4; // Increased threshold from 3
+  const isLongIngredientList = commaCount >= 3; // 3+ commas usually indicates ingredients
+  
+  // Check for ingredient list patterns
+  const ingredientPatterns = [
+    /\b(served with|topped with|includes|contains)\b/i,
+    /\b(lettuce|tomato|onion|pickle|cheese|sauce|dressing)\b.*,.*\b(lettuce|tomato|onion|pickle|cheese|sauce|dressing)\b/i,
+    /\b(mushroom|bell pepper|olive|cilantro|spinach)\b.*,.*\b(mushroom|bell pepper|olive|cilantro|spinach)\b/i
+  ];
+  
+  const hasIngredientPattern = ingredientPatterns.some(pattern => pattern.test(line));
+  
+  if (isLongIngredientList || hasIngredientPattern) {
+    return false;
+  }
+  
+  // Dish name characteristics
+  const hasCapitalization = /[A-Z]/.test(line);
+  const reasonableLength = line.length >= 4 && line.length <= 60; // Tighter length bounds
+  const reasonableWordCount = wordsWithoutPrice.length >= 1 && wordsWithoutPrice.length <= 6;
   
   // Common dish name patterns
   const dishPatterns = [
-    /\b(pizza|sandwich|wrap|salad|burger|chicken|beef|fish|pasta|soup)\b/i,
-    /\b(special|deluxe|supreme|classic|traditional)\b/i,
-    /\b(halal|veggie|vegetarian|crispy|grilled|fried)\b/i
+    /\b(pizza|sandwich|wrap|salad|burger|chicken|beef|fish|pasta|soup|steak|cake|pie)\b/i,
+    /\b(special|deluxe|supreme|classic|traditional|signature)\b/i,
+    /\b(halal|veggie|vegetarian|crispy|grilled|fried|baked)\b/i,
+    /\b(Caesar|Greek|Italian|Mexican|Thai|Chinese)\b/i
   ];
   
   const hasDishKeywords = dishPatterns.some(pattern => pattern.test(line));
   
-  // More permissive logic
-  const isLikelyDish = hasCapitalization && notTooLong && notTooShort && 
-                       !isIngredientList && 
-                       (hasDishKeywords || wordsWithoutPrice.length <= 4);
+  // Check if it starts with a capital letter (dish names usually do)
+  const startsWithCapital = /^[A-Z]/.test(line);
+  
+  // More strict logic - require either dish keywords or proper capitalization
+  const isLikelyDish = hasCapitalization && reasonableLength && reasonableWordCount && 
+                       (hasDishKeywords || (startsWithCapital && wordsWithoutPrice.length <= 4));
   
   return isLikelyDish;
 };

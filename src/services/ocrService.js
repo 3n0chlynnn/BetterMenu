@@ -17,52 +17,44 @@ export const extractTextFromImage = async (imageUri) => {
   }
 
   try {
-    console.log('🖼️ Starting image splitting approach...');
+    console.log('🖼️ Starting adaptive column detection...');
     
     // Get access token
     const token = await getAccessToken();
     
-    // First, get image dimensions to split it properly
-    const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { format: 'jpeg' });
-    const { width, height } = imageInfo;
-    console.log(`📐 Image dimensions: ${width}x${height}`);
+    // First, do OCR on the full image to detect layout
+    console.log('🔍 Full image OCR for layout detection...');
+    const fullOCRResult = await performFullOCR(imageUri, token);
+    const fullText = fullOCRResult.text;
+    const textAnnotations = fullOCRResult.textAnnotations;
     
-    // Crop left half (0 to width/2)
-    console.log('✂️ Cropping left half...');
-    const leftHalf = await ImageManipulator.manipulateAsync(
-      imageUri, 
-      [{ crop: { originX: 0, originY: 0, width: width / 2, height: height } }],
-      { format: 'jpeg', compress: 0.8 }
-    );
+    if (!fullText || fullText.trim().length === 0) {
+      throw new Error('No text detected in the image');
+    }
     
-    // Crop right half (width/2 to width)  
-    console.log('✂️ Cropping right half...');
-    const rightHalf = await ImageManipulator.manipulateAsync(
-      imageUri,
-      [{ crop: { originX: width / 2, originY: 0, width: width / 2, height: height } }],
-      { format: 'jpeg', compress: 0.8 }
-    );
+    // Detect number of columns from spatial data
+    const columnCount = detectColumnCount(textAnnotations);
+    console.log(`📊 Detected ${columnCount} columns`);
     
-    // Do OCR on left half first
-    console.log('🔍 OCR on left half...');
-    const leftText = await performOCR(leftHalf.uri, token);
-    
-    // Do OCR on right half second
-    console.log('🔍 OCR on right half...');
-    const rightText = await performOCR(rightHalf.uri, token);
-    
-    // Combine results (left first, then right)
-    const combinedText = leftText + '\n\n' + rightText;
-    console.log(`📄 Combined text length: ${combinedText.length}`);
-    console.log('📋 Left text preview:', leftText.substring(0, 100) + '...');
-    console.log('📋 Right text preview:', rightText.substring(0, 100) + '...');
-    
-    // Return combined result
-    return {
-      text: combinedText,
-      spatialElements: [],
-      hasColumnLayout: true // We know it has columns since we split it
-    };
+    if (columnCount === 1) {
+      // Single column - use full text as-is
+      console.log('📋 Single column layout - using full text');
+      return {
+        text: fullText,
+        spatialElements: [],
+        hasColumnLayout: false
+      };
+    } else {
+      // Multi-column - split image and do separate OCR
+      console.log(`✂️ Multi-column layout - splitting into ${columnCount} parts`);
+      const combinedText = await processMultiColumnImage(imageUri, token, columnCount);
+      
+      return {
+        text: combinedText,
+        spatialElements: [],
+        hasColumnLayout: true
+      };
+    }
     
   } catch (error) {
     console.error('OCR Error:', error);
@@ -79,27 +71,20 @@ export const extractTextFromImage = async (imageUri) => {
   }
 };
 
-// Helper function to perform OCR on a single image
-const performOCR = async (imageUri, token) => {
-  // Convert image to base64
+// Helper function to perform full OCR with spatial data
+const performFullOCR = async (imageUri, token) => {
   const response = await fetch(imageUri);
   const blob = await response.blob();
   const base64 = await convertBlobToBase64(blob);
-  
-  // Remove data:image/jpeg;base64, prefix if present
   const base64Data = base64.split(',')[1] || base64;
   
   const requestBody = {
     requests: [
       {
-        image: {
-          content: base64Data,
-        },
+        image: { content: base64Data },
         features: [
-          {
-            type: 'TEXT_DETECTION',
-            maxResults: 1,
-          },
+          { type: 'TEXT_DETECTION', maxResults: 1 },
+          { type: 'OBJECT_LOCALIZATION', maxResults: 10 }
         ],
       },
     ],
@@ -120,9 +105,121 @@ const performOCR = async (imageUri, token) => {
     throw new Error(`Vision API Error: ${result.error.message}`);
   }
 
-  // Get the detected text
   const detectedText = result.responses[0]?.textAnnotations?.[0]?.description || '';
-  return detectedText;
+  const textAnnotations = result.responses[0]?.textAnnotations || [];
+  const objects = result.responses[0]?.localizedObjectAnnotations || [];
+  
+  // Validate if this looks like a menu
+  const menuValidation = validateMenuPhoto(detectedText, objects);
+  if (!menuValidation.isLikelyMenu) {
+    throw new Error(`This doesn't appear to be a menu. ${menuValidation.reason}`);
+  }
+  
+  return {
+    text: detectedText,
+    textAnnotations: textAnnotations.slice(1), // Skip full text element
+    objects
+  };
+};
+
+// Helper function to perform OCR on a single image (simplified)
+const performOCR = async (imageUri, token) => {
+  const response = await fetch(imageUri);
+  const blob = await response.blob();
+  const base64 = await convertBlobToBase64(blob);
+  const base64Data = base64.split(',')[1] || base64;
+  
+  const requestBody = {
+    requests: [
+      {
+        image: { content: base64Data },
+        features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
+      },
+    ],
+  };
+
+  const apiResponse = await fetch(API_URLS.VISION, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const result = await apiResponse.json();
+  
+  if (result.error) {
+    throw new Error(`Vision API Error: ${result.error.message}`);
+  }
+
+  return result.responses[0]?.textAnnotations?.[0]?.description || '';
+};
+
+// Detect number of columns from spatial text data
+const detectColumnCount = (textAnnotations) => {
+  if (!textAnnotations || textAnnotations.length < 10) return 1;
+  
+  // Get X coordinates of all text elements
+  const xPositions = textAnnotations.map(annotation => {
+    const vertices = annotation.boundingPoly?.vertices || [];
+    return vertices.length > 0 ? (vertices[0].x || 0) : 0;
+  }).filter(x => x > 0);
+  
+  if (xPositions.length < 10) return 1;
+  
+  // Sort X positions and find significant gaps
+  xPositions.sort((a, b) => a - b);
+  const gaps = [];
+  
+  for (let i = 0; i < xPositions.length - 1; i++) {
+    const gap = xPositions[i + 1] - xPositions[i];
+    if (gap > 100) { // Significant gap
+      gaps.push(gap);
+    }
+  }
+  
+  // Count major column separators (gaps > 150px)
+  const majorGaps = gaps.filter(gap => gap > 150);
+  const columnCount = majorGaps.length + 1;
+  
+  console.log(`🔍 Gap analysis: ${gaps.length} gaps >100px, ${majorGaps.length} major gaps >150px`);
+  return Math.min(columnCount, 4); // Cap at 4 columns max
+};
+
+// Process multi-column image by splitting
+const processMultiColumnImage = async (imageUri, token, columnCount) => {
+  const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { format: 'jpeg' });
+  const { width, height } = imageInfo;
+  console.log(`📐 Image dimensions: ${width}x${height}`);
+  
+  const columnWidth = width / columnCount;
+  const columnTexts = [];
+  
+  for (let i = 0; i < columnCount; i++) {
+    const startX = i * columnWidth;
+    console.log(`✂️ Cropping column ${i + 1}/${columnCount} (X: ${startX.toFixed(0)}-${(startX + columnWidth).toFixed(0)})`);
+    
+    const columnImage = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [{ crop: { originX: startX, originY: 0, width: columnWidth, height: height } }],
+      { format: 'jpeg', compress: 0.8 }
+    );
+    
+    console.log(`🔍 OCR on column ${i + 1}...`);
+    const columnText = await performOCR(columnImage.uri, token);
+    
+    if (columnText.trim().length > 0) {
+      columnTexts.push(columnText);
+      console.log(`📋 Column ${i + 1} text length: ${columnText.length}`);
+    }
+  }
+  
+  // Combine all column texts
+  const combinedText = columnTexts.join('\n\n');
+  console.log(`📄 Combined text from ${columnTexts.length} columns, total length: ${combinedText.length}`);
+  
+  return combinedText;
 };
 
 // Generate JWT and get OAuth access token
